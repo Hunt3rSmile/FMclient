@@ -3,6 +3,7 @@
   "package": "su.firemine.fmvisuals.mixin",
   "compatibilityLevel": "JAVA_8",
   "client": [
+    "ScreenMixin",
     "TitleScreenMixin",
     "ClickableWidgetAccessor",
     "MinecraftClientMixin"

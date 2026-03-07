@@ -12,23 +12,23 @@ import su.firemine.fmvisuals.gui.VisualsScreen;
 @Mixin(MinecraftClient.class)
 public abstract class MinecraftClientMixin {
 
-    private static boolean fmShiftWasDown = false;
+    private static boolean fmRShiftWasDown = false;
 
     @Inject(method = "tick", at = @At("TAIL"))
     private void fmOnTick(CallbackInfo ci) {
         MinecraftClient client = (MinecraftClient) (Object) this;
         if (client.getWindow() == null) return;
 
-        boolean shiftDown = InputUtil.isKeyPressed(
+        boolean down = InputUtil.isKeyPressed(
             client.getWindow().getHandle(),
-            GLFW.GLFW_KEY_LEFT_SHIFT
+            GLFW.GLFW_KEY_RIGHT_SHIFT
         );
 
-        if (shiftDown && !fmShiftWasDown
+        if (down && !fmRShiftWasDown
                 && client.currentScreen == null
                 && client.player != null) {
             client.openScreen(new VisualsScreen());
         }
-        fmShiftWasDown = shiftDown;
+        fmRShiftWasDown = down;
     }
 }

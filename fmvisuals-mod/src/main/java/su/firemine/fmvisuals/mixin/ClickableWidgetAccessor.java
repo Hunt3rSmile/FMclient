@@ -1,0 +1,11 @@
+package su.firemine.fmvisuals.mixin;
+
+import net.minecraft.client.gui.widget.ClickableWidget;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.gen.Accessor;
+
+@Mixin(ClickableWidget.class)
+public interface ClickableWidgetAccessor {
+    @Accessor("width")  int getWidthPx();
+    @Accessor("height") int getHeightPx();
+}
