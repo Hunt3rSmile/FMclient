@@ -30,12 +30,10 @@ public class ScreenMixin {
 
         int W = this.width, H = this.height;
 
-        FMRenderer.rect(matrices, 0, 0, W, H, 0xFF060610);
-        FMRenderer.rect(matrices, 0, 0,     W, 1,     0x55a855f7);
-        FMRenderer.rect(matrices, 0, H - 1, W, H,     0x55a855f7);
-
-        FMRenderer.drawRays(matrices, W, H);
-        FMRenderer.drawParticles(matrices, W, H);
+        FMRenderer.rect(matrices, 0, 0, W, H, 0xFF030308);
+        FMRenderer.drawNetwork(matrices, W, H);
+        FMRenderer.rect(matrices, 0, 0, W, 1, 0x33a855f7);
+        FMRenderer.rect(matrices, 0, H - 1, W, H, 0x33a855f7);
         FMRenderer.drawButtons(matrices, this.buttons, this.textRenderer, mouseX, mouseY);
     }
 }

@@ -1,36 +1,114 @@
 package su.firemine.fmvisuals.util;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawableHelper;
 import net.minecraft.client.gui.widget.ClickableWidget;
+import net.minecraft.client.render.BufferBuilder;
+import net.minecraft.client.render.Tessellator;
+import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.text.Text;
+import net.minecraft.util.math.Matrix4f;
+import org.lwjgl.opengl.GL11;
 import su.firemine.fmvisuals.mixin.ClickableWidgetAccessor;
 
 import java.util.List;
+import java.util.Random;
 
-/**
- * Plain utility class (NOT a Mixin) that holds all shared FM rendering helpers.
- * Extends DrawableHelper to access the protected static fill() method.
- */
 public final class FMRenderer extends DrawableHelper {
 
     private FMRenderer() {}
 
-    /** Public wrapper around the protected DrawableHelper.fill(). */
+    // ── Particle network state ─────────────────────────────────────────────
+    private static final int N = 60;
+    private static final float[] PX  = new float[N];
+    private static final float[] PY  = new float[N];
+    private static final float[] PVX = new float[N];
+    private static final float[] PVY = new float[N];
+    private static long lastNs = 0;
+
+    static {
+        Random rng = new Random(0xFCA_BCDEL);
+        for (int i = 0; i < N; i++) {
+            PX[i] = rng.nextFloat();
+            PY[i] = rng.nextFloat();
+            double a = rng.nextDouble() * Math.PI * 2;
+            float  s = 0.025f + rng.nextFloat() * 0.025f; // normalized units/sec
+            PVX[i] = (float)(Math.cos(a) * s);
+            PVY[i] = (float)(Math.sin(a) * s);
+        }
+    }
+
+    // ── Public fill wrapper ────────────────────────────────────────────────
     public static void rect(MatrixStack m, int x1, int y1, int x2, int y2, int color) {
         fill(m, x1, y1, x2, y2, color);
     }
 
+    // ── Particle network: update + draw ───────────────────────────────────
+    public static void drawNetwork(MatrixStack matrices, int W, int H) {
+        // --- update positions ---
+        long now = System.nanoTime();
+        float dt = (lastNs == 0) ? 0f : Math.min((now - lastNs) / 1_000_000_000f, 0.1f);
+        lastNs = now;
+
+        for (int i = 0; i < N; i++) {
+            PX[i] += PVX[i] * dt;
+            PY[i] += PVY[i] * dt;
+            if (PX[i] < 0f) { PX[i] = 0f; PVX[i] =  Math.abs(PVX[i]); }
+            if (PX[i] > 1f) { PX[i] = 1f; PVX[i] = -Math.abs(PVX[i]); }
+            if (PY[i] < 0f) { PY[i] = 0f; PVY[i] =  Math.abs(PVY[i]); }
+            if (PY[i] > 1f) { PY[i] = 1f; PVY[i] = -Math.abs(PVY[i]); }
+        }
+
+        // --- draw lines between close particles ---
+        float maxDist = W * 0.18f;
+
+        RenderSystem.disableTexture();
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.lineWidth(1.0f);
+
+        Matrix4f matrix = matrices.peek().getModel();
+        Tessellator tess = Tessellator.getInstance();
+        BufferBuilder buf  = tess.getBuffer();
+        buf.begin(GL11.GL_LINES, VertexFormats.POSITION_COLOR);
+
+        for (int i = 0; i < N; i++) {
+            for (int j = i + 1; j < N; j++) {
+                float dx   = (PX[i] - PX[j]) * W;
+                float dy   = (PY[i] - PY[j]) * H;
+                float dist = (float) Math.sqrt(dx * dx + dy * dy);
+                if (dist < maxDist) {
+                    int alpha = (int)((1f - dist / maxDist) * 70);
+                    float x1 = PX[i] * W, y1 = PY[i] * H;
+                    float x2 = PX[j] * W, y2 = PY[j] * H;
+                    buf.vertex(matrix, x1, y1, 0f).color(168, 85, 247, alpha).next();
+                    buf.vertex(matrix, x2, y2, 0f).color(168, 85, 247, alpha).next();
+                }
+            }
+        }
+        tess.draw();
+
+        RenderSystem.enableTexture();
+
+        // --- draw particle dots ---
+        for (int i = 0; i < N; i++) {
+            int x = (int)(PX[i] * W);
+            int y = (int)(PY[i] * H);
+            fill(matrices, x - 1, y - 1, x + 2, y + 2, 0x88a855f7);
+        }
+    }
+
     // ── Rounded fill (radius 2px) ──────────────────────────────────────────
-    public static void fmFill(MatrixStack m, int x, int y, int w, int h, int c) {
+    private static void fmFill(MatrixStack m, int x, int y, int w, int h, int c) {
         fill(m, x + 2, y,     x + w - 2, y + h,     c);
         fill(m, x + 1, y + 1, x + w - 1, y + h - 1, c);
         fill(m, x,     y + 2, x + w,     y + h - 2, c);
     }
 
     // ── Rounded border ─────────────────────────────────────────────────────
-    public static void fmBorder(MatrixStack m, int x, int y, int w, int h, int c) {
+    private static void fmBorder(MatrixStack m, int x, int y, int w, int h, int c) {
         fill(m, x + 2,     y,         x + w - 2,   y + 1,         c);
         fill(m, x + 2,     y + h - 1, x + w - 2,   y + h,         c);
         fill(m, x,         y + 2,     x + 1,       y + h - 2,     c);
@@ -41,49 +119,7 @@ public final class FMRenderer extends DrawableHelper {
         fill(m, x + w - 2, y + h - 2, x + w - 1,   y + h - 1,     c);
     }
 
-    // ── God rays as expanding trapezoids ───────────────────────────────────
-    public static void drawRays(MatrixStack m, int W, int H) {
-        int cx = W / 2;
-        int STEPS = 10;
-        float[][] rays = {
-            {-60f, 1f, 26f, 0x04f}, {-42f, 1f, 20f, 0x06f},
-            {-26f, 2f, 36f, 0x09f}, {-15f, 2f, 24f, 0x0Cf},
-            { -6f, 1f, 16f, 0x0Ff}, {  0f, 1f, 12f, 0x14f},
-            {  6f, 1f, 18f, 0x0Ff}, { 15f, 2f, 28f, 0x0Cf},
-            { 26f, 2f, 34f, 0x09f}, { 42f, 1f, 22f, 0x06f},
-            { 60f, 1f, 24f, 0x04f}, {-75f, 1f, 14f, 0x02f},
-            { 75f, 1f, 16f, 0x02f},
-        };
-        for (float[] r : rays) {
-            double rad = Math.toRadians(r[0]);
-            int color = ((int) r[3] << 24) | 0xEEF0FF;
-            for (int s = 0; s < STEPS; s++) {
-                int y1   = s * H / STEPS;
-                int y2   = (s + 1) * H / STEPS;
-                int midY = (y1 + y2) / 2;
-                int centerX = cx + (int)(midY * Math.sin(rad));
-                int halfW = Math.max(1, (int)(r[1] + (r[2] - r[1]) * (float) midY / H));
-                fill(m, centerX - halfW, y1, centerX + halfW, y2, color);
-            }
-        }
-        fill(m, cx - 30, 0, cx + 30, 30, 0x07EEF0FF);
-        fill(m, cx - 12, 0, cx + 12, 14, 0x0CEEF0FF);
-    }
-
-    // ── Scattered static particles ─────────────────────────────────────────
-    public static void drawParticles(MatrixStack m, int W, int H) {
-        long s = (long) W * 7919L + (long) H * 6271L;
-        for (int i = 0; i < 55; i++) {
-            s = s * 6364136223846793005L + 1442695040888963407L;
-            int px = (int) Math.abs(s % W);
-            s = s * 6364136223846793005L + 1442695040888963407L;
-            int py = (int) Math.abs(s % H);
-            int alpha = 0x08 + (int) Math.abs(s % 0x18);
-            fill(m, px, py, px + 1, py + 1, (alpha << 24) | 0xFFFFFF);
-        }
-    }
-
-    // ── Restyle all screen buttons ─────────────────────────────────────────
+    // ── Restyle buttons ────────────────────────────────────────────────────
     public static void drawButtons(MatrixStack matrices, List<ClickableWidget> buttons,
                                     TextRenderer tr, int mouseX, int mouseY) {
         for (ClickableWidget btn : buttons) {
@@ -107,7 +143,7 @@ public final class FMRenderer extends DrawableHelper {
                 tr.drawWithShadow(matrices, msg,
                     btn.x + (bw - tw) / 2.0f,
                     btn.y + (bh - 8) / 2.0f,
-                    hov ? 0xFFFFFFFF : 0xFF9999CC);
+                    hov ? 0xFFFFFFFF : 0xFFCCAAFF);
             }
         }
     }
