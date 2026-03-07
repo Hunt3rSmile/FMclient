@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FMclient</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Splash screen -->
+  <div class="splash" id="splash">
+    <div class="splash-content">
+      <img src="../assets/flame.jpg" class="splash-logo" alt="logo">
+      <div class="splash-title">FMclient</div>
+      <div class="splash-bar-wrap">
+        <div class="splash-bar" id="splash-bar"></div>
+      </div>
+      <div class="splash-hint">Загрузка...</div>
+    </div>
+  </div>
+
+  <canvas id="bg-canvas"></canvas>
+
+  <!-- Custom titlebar -->
+  <div class="titlebar">
+    <div class="titlebar-drag"></div>
+    <div class="titlebar-controls">
+      <button class="win-btn minimize" id="btn-minimize" title="Свернуть">
+        <svg width="10" height="2" viewBox="0 0 10 2"><line x1="0" y1="1" x2="10" y2="1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <button class="win-btn close" id="btn-close" title="Закрыть">
+        <svg width="10" height="10" viewBox="0 0 10 10">
+          <line x1="1" y1="1" x2="9" y2="9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <line x1="9" y1="1" x2="1" y2="9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Update banner -->
+  <div class="update-banner" id="update-banner">
+    <div class="update-banner-inner">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+      </svg>
+      <span class="update-text">Доступно обновление <strong id="update-version"></strong></span>
+      <button class="update-download-btn" id="update-download-btn">Скачать</button>
+      <button class="update-dismiss-btn" id="update-dismiss-btn" title="Позже">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- App -->
+  <div class="app" id="app">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="logo">
+        <div class="logo-icon">
+          <img src="../assets/flame.jpg" class="flame-img logo-flame" alt="logo">
+        </div>
+        <div class="logo-text">FMclient</div>
+      </div>
+
+      <nav class="nav">
+        <button class="nav-item active" data-tab="home">
+          <svg class="nav-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+          </svg>
+          <span>Главная</span>
+        </button>
+        <button class="nav-item" data-tab="mods">
+          <svg class="nav-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+            <polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>
+          </svg>
+          <span>Моды</span>
+        </button>
+        <button class="nav-item" data-tab="settings">
+          <svg class="nav-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+          <span>Настройки</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-spacer"></div>
+
+      <!-- Java status -->
+      <div class="java-status" id="java-status">
+        <div class="java-dot" id="java-dot"></div>
+        <span id="java-label">Проверка Java...</span>
+      </div>
+
+      <!-- Profile -->
+      <div class="sidebar-bottom">
+        <div class="profile" id="profile-section">
+          <div class="avatar" id="avatar-display">
+            <img src="../assets/flame.jpg" class="flame-img avatar-flame" alt="avatar">
+          </div>
+          <div class="profile-info">
+            <div class="username-display" id="username-display">Игрок</div>
+            <div class="profile-status">
+              <span class="status-dot"></span>
+              <span>В сети</span>
+            </div>
+          </div>
+          <button class="edit-profile-btn" id="edit-profile-btn" title="Изменить ник">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="profile-edit" id="profile-edit">
+          <input type="text" class="username-input" id="username-input" placeholder="Ваш ник (3-16 символов)" maxlength="16">
+          <button class="save-btn" id="save-username-btn">Сохранить</button>
+        </div>
+
+        <!-- Microsoft auth -->
+        <div class="ms-auth" id="ms-auth">
+          <!-- Not logged in -->
+          <button class="ms-login-btn" id="ms-login-btn">
+            <svg width="14" height="14" viewBox="0 0 21 21" fill="none">
+              <rect x="1"  y="1"  width="9" height="9" fill="#f25022"/>
+              <rect x="11" y="1"  width="9" height="9" fill="#7fba00"/>
+              <rect x="1"  y="11" width="9" height="9" fill="#00a4ef"/>
+              <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+            </svg>
+            Войти через Microsoft
+          </button>
+          <!-- Logged in (hidden by default) -->
+          <div class="ms-logged" id="ms-logged" style="display:none">
+            <div class="ms-badge">
+              <svg width="12" height="12" viewBox="0 0 21 21" fill="none">
+                <rect x="1"  y="1"  width="9" height="9" fill="#f25022"/>
+                <rect x="11" y="1"  width="9" height="9" fill="#7fba00"/>
+                <rect x="1"  y="11" width="9" height="9" fill="#00a4ef"/>
+                <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+              </svg>
+              <span id="ms-badge-label">Лицензия</span>
+            </div>
+            <button class="ms-logout-btn" id="ms-logout-btn">Выйти</button>
+          </div>
+        </div>
+
+        <!-- ely.by auth (free multiplayer) -->
+        <div class="elyby-auth" id="elyby-auth">
+          <button class="elyby-toggle-btn" id="elyby-toggle-btn">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+            </svg>
+            Войти через ely.by
+          </button>
+          <div class="elyby-form" id="elyby-form">
+            <input type="text"     class="elyby-input" id="elyby-email"    placeholder="Email или логин">
+            <input type="password" class="elyby-input" id="elyby-password" placeholder="Пароль">
+            <div class="elyby-actions">
+              <button class="elyby-submit-btn" id="elyby-submit-btn">Войти</button>
+            </div>
+            <div class="elyby-hint">Нет аккаунта? Зарегистрируйся на ely.by — бесплатно, открывает мультиплеер без лицензии</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="content">
+
+      <!-- HOME TAB -->
+      <div class="tab active" id="tab-home">
+        <div class="content-scroll">
+          <div class="welcome-section">
+            <div class="welcome-text">
+              <h1 class="welcome-title">Привет, <span id="welcome-username" class="accent">Игрок</span></h1>
+              <p class="welcome-subtitle">Выбери версию и начни приключение</p>
+            </div>
+            <div class="server-badge">
+              <div class="server-dot"></div>
+              <span>Mojang доступен</span>
+            </div>
+          </div>
+
+          <!-- Tips carousel -->
+          <div class="tips-card">
+            <div class="tips-tag">Совет дня</div>
+            <div class="tips-carousel" id="tips-carousel">
+              <div class="tip-slide active">
+                <h3>Производительность</h3>
+                <p>Sodium + Iris дают +300% FPS по сравнению с ванильным клиентом. Установи их для Fabric.</p>
+              </div>
+              <div class="tip-slide">
+                <h3>Оптимизация памяти</h3>
+                <p>Не выделяй Java больше 8 ГБ — это не ускоряет игру. Оптимально 2–4 ГБ для большинства сборок.</p>
+              </div>
+              <div class="tip-slide">
+                <h3>Быстрый мир</h3>
+                <p>Используй seed-ы для поиска идеального спавна. Лучшие ресурсы — в seed с деревней рядом со спавном.</p>
+              </div>
+              <div class="tip-slide">
+                <h3>Java 21+</h3>
+                <p>Minecraft 1.20.5+ требует Java 21. Для старых версий (1.16 и ниже) лучше Java 8.</p>
+              </div>
+              <div class="tip-slide">
+                <h3>Резервные копии</h3>
+                <p>Регулярно делай бэкапы папки saves. Один краш может удалить прогресс сотен часов.</p>
+              </div>
+              <div class="tip-slide">
+                <h3>F3 меню</h3>
+                <p>Нажми F3 в игре чтобы увидеть FPS, координаты, биом и загрузку чанков в реальном времени.</p>
+              </div>
+            </div>
+            <div class="tips-dots" id="tips-dots"></div>
+          </div>
+
+          <!-- Quick stats -->
+          <div class="stats-row">
+            <div class="stat-card">
+              <div class="stat-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              </div>
+              <div class="stat-info">
+                <div class="stat-label">Версия</div>
+                <div class="stat-value" id="stat-version">1.21.11</div>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 20h.01M7 20v-4"/><path d="M12 20v-8"/><path d="M17 20V8"/><path d="M22 4v16"/></svg>
+              </div>
+              <div class="stat-info">
+                <div class="stat-label">Память</div>
+                <div class="stat-value" id="stat-ram">2 ГБ</div>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+              </div>
+              <div class="stat-info">
+                <div class="stat-label">Java</div>
+                <div class="stat-value" id="stat-java">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Play bar -->
+        <div class="play-bar">
+          <!-- Main controls row -->
+          <div class="play-controls">
+            <div class="control-group">
+              <label class="control-label">Версия</label>
+              <div class="version-row">
+                <div class="custom-select" id="version-selector">
+                  <div class="select-selected" id="version-selected">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+                    <span id="version-text">1.21.11</span>
+                  </div>
+                  <div class="select-options" id="version-options">
+                    <div class="options-label">Java Edition</div>
+                    <div class="select-option active" data-value="1.21.11">1.21.11</div>
+                    <div class="select-option" data-value="1.21.4">1.21.4</div>
+                    <div class="select-option" data-value="1.21.1">1.21.1</div>
+                    <div class="select-option" data-value="1.20.4">1.20.4</div>
+                    <div class="select-option" data-value="1.20.1">1.20.1</div>
+                    <div class="select-option" data-value="1.19.4">1.19.4</div>
+                    <div class="select-option" data-value="1.18.2">1.18.2</div>
+                    <div class="select-option" data-value="1.16.5">1.16.5</div>
+                    <div class="select-option" data-value="1.12.2">1.12.2</div>
+                    <div class="select-option" data-value="1.8.9">1.8.9</div>
+                  </div>
+                </div>
+                <button class="delete-version-btn" id="delete-version-btn" title="Удалить версию" style="display:none">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="control-group">
+              <label class="control-label">Тип</label>
+              <div class="custom-select" id="type-selector">
+                <div class="select-selected" id="type-selected">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+                  <span id="type-text">Fabric</span>
+                </div>
+                <div class="select-options" id="type-options">
+                  <div class="options-label">Загрузчик</div>
+                  <div class="select-option active" data-value="fabric">Fabric</div>
+                  <div class="select-option" data-value="forge">Forge</div>
+                  <div class="select-option" data-value="neoforge">NeoForge</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="control-group ram-group">
+              <label class="control-label">Оперативная память: <span id="ram-value" class="accent">2048</span> МБ</label>
+              <div class="ram-row">
+                <input type="range" class="ram-slider" id="ram-slider" min="512" max="8192" step="512" value="2048">
+                <div class="ram-presets">
+                  <button class="ram-preset" data-value="1024">1G</button>
+                  <button class="ram-preset" data-value="2048">2G</button>
+                  <button class="ram-preset" data-value="4096">4G</button>
+                  <button class="ram-preset" data-value="8192">8G</button>
+                </div>
+              </div>
+            </div>
+
+            <button class="play-btn" id="play-btn">
+              <div class="play-inner">
+                <div class="play-btn-normal">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                  <span>ИГРАТЬ</span>
+                </div>
+                <div class="play-btn-loading" style="display:none">
+                  <div class="spinner"></div>
+                  <span>Загрузка...</span>
+                </div>
+                <div class="play-btn-running" style="display:none">
+                  <div class="running-dot"></div>
+                  <span>ИГРАЮ</span>
+                </div>
+              </div>
+              <div class="play-shine"></div>
+            </button>
+          </div>
+
+          <!-- Launch progress (shown while downloading/launching) -->
+          <div class="launch-progress-section" id="launch-progress-section" style="display:none">
+            <div class="lp-header">
+              <div class="lp-step-icon" id="lp-step-icon">
+                <div class="lp-spinner"></div>
+              </div>
+              <div class="lp-info">
+                <div class="lp-step-name" id="lp-step-name">Подготовка...</div>
+                <div class="lp-message"   id="lp-message">Подключение к серверам Mojang</div>
+              </div>
+              <div class="lp-percent" id="lp-percent">0%</div>
+            </div>
+            <div class="lp-bar-wrap">
+              <div class="lp-bar" id="lp-bar" style="width:0%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODS TAB -->
+      <div class="tab" id="tab-mods">
+        <div class="mods-layout">
+
+          <!-- Header -->
+          <div class="mods-hdr">
+            <div>
+              <h1 class="mods-hdr-title">Менеджер модов</h1>
+              <span class="mods-hdr-sub">Поиск и установка через Modrinth</span>
+            </div>
+            <button class="mods-folder-btn" id="open-mods-folder-btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+              </svg>
+              Папка модов
+            </button>
+          </div>
+
+          <!-- Loaders -->
+          <div class="loaders-row" id="loaders-row">
+            <div class="loader-chip not-installed" id="lchip-fabric">
+              <div class="loader-chip-dot"></div>
+              <span class="loader-chip-name">Fabric</span>
+              <span class="loader-chip-ver" id="lver-fabric">не установлен</span>
+              <button class="loader-chip-btn" id="lbtn-fabric">Установить</button>
+            </div>
+            <div class="loader-chip not-installed" id="lchip-forge">
+              <div class="loader-chip-dot"></div>
+              <span class="loader-chip-name">Forge</span>
+              <span class="loader-chip-ver" id="lver-forge">не установлен</span>
+              <button class="loader-chip-btn" id="lbtn-forge">Установить</button>
+            </div>
+            <div class="loader-chip not-installed" id="lchip-neoforge">
+              <div class="loader-chip-dot"></div>
+              <span class="loader-chip-name">NeoForge</span>
+              <span class="loader-chip-ver" id="lver-neoforge">не установлен</span>
+              <button class="loader-chip-btn" id="lbtn-neoforge">Установить</button>
+            </div>
+          </div>
+
+          <!-- Loader install progress -->
+          <div class="loader-install-progress" id="loader-install-progress" style="display:none">
+            <div class="lip-header">
+              <div class="lip-spinner"></div>
+              <span class="lip-msg" id="lip-msg">Установка...</span>
+              <span class="lip-pct" id="lip-pct">0%</span>
+            </div>
+            <div class="lip-bar-wrap">
+              <div class="lip-bar" id="lip-bar" style="width:0%"></div>
+            </div>
+          </div>
+
+          <!-- Search bar -->
+          <div class="mods-search-bar">
+            <div class="mods-search-input-wrap">
+              <svg class="mods-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              <input type="text" class="mods-search-input" id="mod-search-input" placeholder="Поиск модов... (Sodium, JEI, Iris...)">
+            </div>
+            <select class="mods-filter" id="mod-filter-version">
+              <option value="1.21.4">1.21.4</option>
+              <option value="1.21.1">1.21.1</option>
+              <option value="1.20.4">1.20.4</option>
+              <option value="1.20.1">1.20.1</option>
+              <option value="1.19.4">1.19.4</option>
+              <option value="1.18.2">1.18.2</option>
+              <option value="1.16.5">1.16.5</option>
+              <option value="1.12.2">1.12.2</option>
+            </select>
+            <select class="mods-filter" id="mod-filter-loader">
+              <option value="all">Все загрузчики</option>
+              <option value="fabric">Fabric</option>
+              <option value="forge">Forge</option>
+              <option value="neoforge">NeoForge</option>
+            </select>
+            <button class="mods-search-btn" id="mods-search-btn">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              Найти
+            </button>
+          </div>
+
+          <!-- Scrollable body -->
+          <div class="mods-body">
+
+            <!-- Search results -->
+            <div id="mods-results-wrap" style="display:none">
+              <div class="mods-section-hdr">
+                <span id="mods-results-title">Результаты</span>
+              </div>
+              <div class="mods-grid" id="mods-grid"></div>
+              <button class="mods-more-btn" id="mods-more-btn" style="display:none">Загрузить ещё</button>
+            </div>
+
+            <!-- Installed mods -->
+            <div class="mods-section-hdr" style="margin-top:4px">
+              <span>Установленные моды</span>
+              <span class="mods-count-badge" id="mods-installed-count">0</span>
+              <button class="mods-icon-btn" id="refresh-installed-btn" title="Обновить">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                </svg>
+              </button>
+            </div>
+            <div class="installed-mods-list" id="installed-mods-list">
+              <div class="mods-empty-hint">Папка модов пуста — установи моды через поиск выше</div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- SETTINGS TAB -->
+      <div class="tab" id="tab-settings">
+        <div class="content-scroll settings-scroll">
+          <div class="settings-header">
+            <h1>Настройки</h1>
+            <p>Конфигурация лаунчера и игры</p>
+          </div>
+
+          <div class="settings-section">
+            <div class="section-title">Игра</div>
+
+            <div class="setting-row">
+              <div class="setting-info">
+                <div class="setting-name">Директория игры</div>
+                <div class="setting-desc">Путь к папке .minecraft</div>
+              </div>
+              <div class="setting-control">
+                <input type="text" class="setting-input" id="game-dir" placeholder="~/.minecraft">
+                <button class="setting-btn" id="browse-btn">Обзор</button>
+              </div>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-info">
+                <div class="setting-name">Путь к Java</div>
+                <div class="setting-desc">Исполняемый файл java (пусто = автоопределение)</div>
+              </div>
+              <div class="setting-control">
+                <input type="text" class="setting-input" id="java-path" placeholder="Автоопределение">
+              </div>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-info">
+                <div class="setting-name">Полноэкранный режим</div>
+                <div class="setting-desc">Запускать Minecraft в полном экране</div>
+              </div>
+              <div class="setting-control">
+                <div class="toggle" id="fullscreen-toggle" data-key="fullscreen">
+                  <div class="toggle-track">
+                    <div class="toggle-thumb"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-info">
+                <div class="setting-name">Закрывать лаунчер при запуске</div>
+                <div class="setting-desc">Скрыть FMclient после запуска игры</div>
+              </div>
+              <div class="setting-control">
+                <div class="toggle on" id="hide-on-launch-toggle" data-key="hideOnLaunch">
+                  <div class="toggle-track">
+                    <div class="toggle-thumb"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <div class="section-title">О лаунчере</div>
+            <div class="about-card">
+              <div class="about-logo">
+                <span class="logo-fm">FM</span><span class="logo-client">client</span>
+              </div>
+              <div class="about-version">Версия 1.1.5</div>
+              <div class="about-desc">Современный, красивый лаунчер для Minecraft</div>
+              <div class="about-tags">
+                <span class="about-tag">Electron</span>
+                <span class="about-tag">Node.js</span>
+                <span class="about-tag">Open Source</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
