@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "fmvisuals",
+  "version": "1.0.1",
+  "name": "FMclient Visuals",
+  "description": "Custom title screen and visual settings for FMclient",
+  "authors": ["Hunt3rSmile"],
+  "contact": {
+    "homepage": "https://github.com/Hunt3rSmile/FMclient"
+  },
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["su.firemine.fmvisuals.FMVisualsClient"]
+  },
+  "mixins": ["fmvisuals.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.11.3",
+    "minecraft": "1.16.5",
+    "java": ">=8"
+  }
+}

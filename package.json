@@ -1,0 +1,96 @@
+{
+  "name": "fmclient",
+  "version": "1.1.7",
+  "description": "FMclient - Modern Minecraft Launcher",
+  "homepage": "https://github.com/Hunt3rSmile/FMclient",
+  "author": {
+    "name": "Hunt3rSmile",
+    "email": "hunt3rsmile@firemine.su"
+  },
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:linux": "electron-builder --linux AppImage deb --x64",
+    "build:win": "electron-builder --win nsis --x64",
+    "build:all": "electron-builder --linux AppImage deb --win nsis --x64",
+    "build:pacman": "rm -f dist/*.pacman && electron-builder --linux pacman --x64 && node scripts/fix-pacman.js"
+  },
+  "build": {
+    "appId": "su.firemine.fmclient",
+    "productName": "FMclient",
+    "copyright": "Copyright © 2026 FMclient",
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "pacman",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "category": "Game",
+      "description": "Modern Minecraft Launcher"
+    },
+    "deb": {
+      "depends": [],
+      "maintainer": "Hunt3rSmile <hunt3rsmile@firemine.su>"
+    },
+    "pacman": {
+      "depends": [],
+      "fpm": [
+        "--no-auto-depends"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerSidebar": "build/installer-sidebar.bmp",
+      "uninstallerSidebar": "build/installer-sidebar.bmp",
+      "include": "build/installer.nsh",
+      "deleteAppDataOnUninstall": false
+    }
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  }
+}

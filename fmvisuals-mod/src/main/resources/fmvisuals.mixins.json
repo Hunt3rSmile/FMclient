@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "package": "su.firemine.fmvisuals.mixin",
+  "compatibilityLevel": "JAVA_8",
+  "client": [
+    "TitleScreenMixin",
+    "ClickableWidgetAccessor",
+    "MinecraftClientMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

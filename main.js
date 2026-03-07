@@ -9,7 +9,7 @@ const zlib    = require('zlib');
 const crypto  = require('crypto');
 
 const GITHUB_REPO    = 'Hunt3rSmile/FMclient';
-const CURRENT_VER    = '1.1.6';
+const CURRENT_VER    = '1.1.7';
 
 let mainWindow;
 let detectedJavaPath = null;
@@ -831,9 +831,7 @@ function ensureFMVisuals(gameDir) {
       ? path.join(process.resourcesPath, 'assets', 'mods', 'fmvisuals.jar')
       : path.join(__dirname, 'assets', 'mods', 'fmvisuals.jar');
     if (!fs.existsSync(src)) return; // asset not present (safety check)
-    if (!fs.existsSync(dest)) {
-      fs.copyFileSync(src, dest);
-    }
+    fs.copyFileSync(src, dest); // always overwrite to ensure latest version
   } catch { /* non-fatal */ }
 }
 
