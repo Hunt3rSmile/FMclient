@@ -1,6 +1,6 @@
 {
   "name": "fmclient",
-  "version": "1.1.8",
+  "version": "1.1.9",
   "description": "FMclient - Modern Minecraft Launcher",
   "homepage": "https://github.com/Hunt3rSmile/FMclient",
   "author": {
@@ -25,6 +25,12 @@
       "src/**/*",
       "assets/**/*",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "assets/mods",
+        "to": "assets/mods"
+      }
     ],
     "directories": {
       "buildResources": "build",

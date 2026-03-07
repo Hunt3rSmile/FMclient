@@ -9,7 +9,7 @@ const zlib    = require('zlib');
 const crypto  = require('crypto');
 
 const GITHUB_REPO    = 'Hunt3rSmile/FMclient';
-const CURRENT_VER    = '1.1.8';
+const CURRENT_VER    = '1.1.9';
 
 let mainWindow;
 let detectedJavaPath = null;
