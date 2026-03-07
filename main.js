@@ -9,7 +9,7 @@ const zlib    = require('zlib');
 const crypto  = require('crypto');
 
 const GITHUB_REPO    = 'Hunt3rSmile/FMclient';
-const CURRENT_VER    = '1.1.7';
+const CURRENT_VER    = '1.1.8';
 
 let mainWindow;
 let detectedJavaPath = null;
@@ -821,18 +821,36 @@ ipcMain.handle('auth-elyby', async (event, { username, password }) => {
 // ── Ensure FMclient Visuals mod is always present in mods/ ───────
 // The mod is bundled with the launcher in assets/mods/fmvisuals.jar
 // It is restored automatically if the user deletes it.
+function sendDebug(msg) {
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('debug-log', `[FMclient] ${msg}`);
+    }
+  } catch {}
+}
+
 function ensureFMVisuals(gameDir) {
   try {
-    const modsDir  = path.join(gameDir, 'mods');
+    const modsDir = path.join(gameDir, 'mods');
     fs.mkdirSync(modsDir, { recursive: true });
-    const dest     = path.join(modsDir, 'fmvisuals.jar');
-    // Source: bundled asset (works both in dev and packaged Electron app)
-    const src      = app.isPackaged
+    const dest = path.join(modsDir, 'fmvisuals.jar');
+    const src  = app.isPackaged
       ? path.join(process.resourcesPath, 'assets', 'mods', 'fmvisuals.jar')
       : path.join(__dirname, 'assets', 'mods', 'fmvisuals.jar');
-    if (!fs.existsSync(src)) return; // asset not present (safety check)
-    fs.copyFileSync(src, dest); // always overwrite to ensure latest version
-  } catch { /* non-fatal */ }
+
+    sendDebug(`ensureFMVisuals: gameDir=${gameDir}`);
+    sendDebug(`ensureFMVisuals: src=${src} exists=${fs.existsSync(src)}`);
+    sendDebug(`ensureFMVisuals: dest=${dest}`);
+
+    if (!fs.existsSync(src)) {
+      sendDebug(`ensureFMVisuals: ERROR — source JAR not found!`);
+      return;
+    }
+    fs.copyFileSync(src, dest);
+    sendDebug(`ensureFMVisuals: copied OK (${fs.statSync(dest).size} bytes)`);
+  } catch (e) {
+    sendDebug(`ensureFMVisuals: EXCEPTION — ${e.message}`);
+  }
 }
 
 async function ensureAuthlibInjector(gameDir) {
@@ -890,6 +908,9 @@ ipcMain.handle('launch-game', async (event, options) => {
     if (mainWindow && !mainWindow.isDestroyed())
       mainWindow.webContents.send('launch-progress', { step, current, total, message });
   };
+
+  sendDebug(`=== LAUNCH START ===`);
+  sendDebug(`version=${version} type=${type} gameDir=${gameDir} java=${javaExec}`);
 
   try {
     // Auth data

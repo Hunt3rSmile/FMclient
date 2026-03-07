@@ -581,6 +581,51 @@ window.electronAPI?.onGameExit(data => {
 });
 
 
+// ── Debug Mode ───────────────────────────────────────────────
+const debugToggle  = document.getElementById('debug-mode-toggle');
+const debugPanel   = document.getElementById('debug-panel');
+const debugLogArea = document.getElementById('debug-log-area');
+const debugClearBtn = document.getElementById('debug-clear-btn');
+const debugCopyBtn  = document.getElementById('debug-copy-btn');
+
+let debugEnabled = localStorage.getItem('debugMode') === 'true';
+
+function applyDebugState() {
+  debugPanel.style.display = debugEnabled ? 'flex' : 'none';
+  debugToggle.classList.toggle('on', debugEnabled);
+}
+
+applyDebugState();
+
+debugToggle.addEventListener('click', () => {
+  debugEnabled = !debugEnabled;
+  localStorage.setItem('debugMode', debugEnabled);
+  applyDebugState();
+});
+
+function appendDebugLog(text) {
+  if (!debugEnabled) return;
+  const ts = new Date().toLocaleTimeString('ru', { hour12: false });
+  debugLogArea.value += `[${ts}] ${text}\n`;
+  debugLogArea.scrollTop = debugLogArea.scrollHeight;
+}
+
+debugClearBtn.addEventListener('click', () => { debugLogArea.value = ''; });
+debugCopyBtn.addEventListener('click', () => {
+  navigator.clipboard.writeText(debugLogArea.value);
+  showToast('Логи скопированы');
+});
+
+window.electronAPI?.onDebugLog(msg => appendDebugLog(msg));
+window.electronAPI?.onGameLog(line => {
+  if (!debugEnabled) return;
+  // Show only lines with errors or mod-related info
+  if (/error|exception|fmvisuals|mixin|fabric/i.test(line)) {
+    appendDebugLog('[MC] ' + line.trim());
+  }
+});
+
+
 // ── Play Button ──────────────────────────────────────────────
 const playBtn          = document.getElementById('play-btn');
 const playBtnNormal   = playBtn.querySelector('.play-btn-normal');
