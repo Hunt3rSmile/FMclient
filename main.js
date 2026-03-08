@@ -1263,49 +1263,21 @@ ipcMain.handle('launch-game', async (event, options) => {
 
     // ── Merge modloader profile into vJson if needed ──────────
     if (type && type !== 'vanilla' && type !== 'optifine') {
-      const allVersionsDir2 = path.join(gameDir, 'versions');
-      let profileDirs = [];
-      try { profileDirs = fs.readdirSync(allVersionsDir2); } catch {}
+      send('loader', 0, 100, `Проверка ${loaderLabel(type)}...`);
+      const loaderStatus = await ensureLoaderInstalled({
+        type,
+        mcVersion: version,
+        gameDir,
+        javaExec,
+        onProgress: (message, pct) => send('loader', pct ?? 0, 100, message),
+      });
+      const profileId = loaderStatus.versionId || findInstalledLoaderProfileId(type, version, gameDir);
+      if (!profileId) throw new Error(`${loaderLabel(type)} не удалось подготовить для MC ${version}`);
 
-      let profileId = null;
-      if (type === 'fabric') {
-        profileId = profileDirs.find(d => d.startsWith('fabric-loader-') && d.endsWith(`-${version}`));
-        if (!profileId) throw new Error(`Fabric не установлен для MC ${version}. Установи его во вкладке "Моды"`);
-      } else if (type === 'forge') {
-        profileId = profileDirs.find(d => d.startsWith(`${version}-forge`) || d.startsWith(`${version}-Forge`));
-        if (!profileId) throw new Error(`Forge не установлен для MC ${version}. Установи его во вкладке "Моды"`);
-      } else if (type === 'neoforge') {
-        const vp   = version.split('.');
-        const nfPfx = vp.length >= 3 ? `neoforge-${vp[1]}.${vp[2]}.` : `neoforge-`;
-        profileId  = profileDirs.find(d => d.startsWith(nfPfx));
-        if (!profileId) throw new Error(`NeoForge не установлен для MC ${version}. Установи его во вкладке "Моды"`);
-      }
-
-      if (profileId) {
-        const profilePath = path.join(gameDir, 'versions', profileId, `${profileId}.json`);
-        if (fs.existsSync(profilePath)) {
-          const loaderJson = JSON.parse(fs.readFileSync(profilePath, 'utf8'));
-          // Prepend loader libraries so they take priority
-          vJson.libraries = [...(loaderJson.libraries || []), ...(vJson.libraries || [])];
-          if (loaderJson.mainClass) vJson.mainClass = loaderJson.mainClass;
-          if (!vJson.arguments) vJson.arguments = {};
-          if (loaderJson.arguments?.jvm) {
-            vJson.arguments.jvm = [
-              ...(Array.isArray(loaderJson.arguments.jvm) ? loaderJson.arguments.jvm : []),
-              ...(Array.isArray(vJson.arguments.jvm) ? vJson.arguments.jvm : []),
-            ];
-          }
-          if (loaderJson.arguments?.game) {
-            vJson.arguments.game = [
-              ...(Array.isArray(vJson.arguments.game) ? vJson.arguments.game : []),
-              ...(Array.isArray(loaderJson.arguments.game) ? loaderJson.arguments.game : []),
-            ];
-          }
-          if (loaderJson.minecraftArguments) {
-            vJson.minecraftArguments = (loaderJson.minecraftArguments + ' ' + (vJson.minecraftArguments || '')).trim();
-            delete vJson.arguments;
-          }
-        }
+      const profilePath = path.join(gameDir, 'versions', profileId, `${profileId}.json`);
+      if (fs.existsSync(profilePath)) {
+        const loaderJson = JSON.parse(fs.readFileSync(profilePath, 'utf8'));
+        mergeLoaderProfileIntoVersionJson(vJson, loaderJson);
       }
     }
 
@@ -1437,6 +1409,7 @@ ipcMain.handle('launch-game', async (event, options) => {
     // ── 6. Patch servers.dat ──────────────────────────────────
     try { patchServersDat(gameDir); } catch {}
 
+    activateProfileMods(gameDir, version, type);
     // ── Ensure FMclient Visuals mod is present (restore if deleted) ──
     ensureFMVisuals(gameDir);
     ensureRussianLanguage(gameDir);
@@ -1567,6 +1540,333 @@ function resolveGameDir(raw) {
   return trimmed;
 }
 
+function normalizeModLoader(loader) {
+  const normalized = String(loader || '').toLowerCase();
+  return ['fabric', 'forge', 'neoforge'].includes(normalized) ? normalized : 'fabric';
+}
+
+function loaderLabel(loader) {
+  const normalized = normalizeModLoader(loader);
+  return normalized === 'neoforge'
+    ? 'NeoForge'
+    : normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function findInstalledLoaderProfileId(type, mcVersion, gameDir) {
+  const versionsDir = path.join(gameDir, 'versions');
+  let dirs = [];
+  try { dirs = fs.readdirSync(versionsDir); } catch {}
+
+  if (type === 'fabric') {
+    return dirs.find(d => d.startsWith('fabric-loader-') && d.endsWith(`-${mcVersion}`)) || null;
+  }
+
+  if (type === 'forge') {
+    return dirs.find(d => d.startsWith(`${mcVersion}-forge`) || d.startsWith(`${mcVersion}-Forge`)) || null;
+  }
+
+  if (type === 'neoforge') {
+    const vp = mcVersion.split('.');
+    const nfPfx = vp.length >= 3 ? `neoforge-${vp[1]}.${vp[2]}.` : 'neoforge-';
+    return dirs.find(d => d.startsWith(nfPfx)) || null;
+  }
+
+  return null;
+}
+
+function getInstalledLoaderStatus(type, mcVersion, gameDir) {
+  const versionId = findInstalledLoaderProfileId(type, mcVersion, gameDir);
+  return versionId
+    ? { installed: true, versionId }
+    : { installed: false };
+}
+
+function mergeLoaderProfileIntoVersionJson(vJson, loaderJson) {
+  vJson.libraries = [...(loaderJson.libraries || []), ...(vJson.libraries || [])];
+  if (loaderJson.mainClass) vJson.mainClass = loaderJson.mainClass;
+  if (!vJson.arguments) vJson.arguments = {};
+
+  if (loaderJson.arguments?.jvm) {
+    vJson.arguments.jvm = [
+      ...(Array.isArray(loaderJson.arguments.jvm) ? loaderJson.arguments.jvm : []),
+      ...(Array.isArray(vJson.arguments.jvm) ? vJson.arguments.jvm : []),
+    ];
+  }
+
+  if (loaderJson.arguments?.game) {
+    vJson.arguments.game = [
+      ...(Array.isArray(vJson.arguments.game) ? vJson.arguments.game : []),
+      ...(Array.isArray(loaderJson.arguments.game) ? loaderJson.arguments.game : []),
+    ];
+  }
+
+  if (loaderJson.minecraftArguments) {
+    vJson.minecraftArguments = (loaderJson.minecraftArguments + ' ' + (vJson.minecraftArguments || '')).trim();
+    delete vJson.arguments;
+  }
+}
+
+function sanitizeProfileSegment(value) {
+  return String(value || 'default').replace(/[^a-zA-Z0-9._-]+/g, '-');
+}
+
+function getModsProfileKey(mcVersion, loader) {
+  return `${sanitizeProfileSegment(mcVersion)}-${sanitizeProfileSegment(loader)}`;
+}
+
+function getModsProfileDir(gameDir, mcVersion, loader) {
+  return path.join(
+    gameDir,
+    'fmclient',
+    'mod-profiles',
+    getModsProfileKey(mcVersion, normalizeModLoader(loader)),
+    'mods',
+  );
+}
+
+function getModsProfileStatePath(gameDir) {
+  return path.join(gameDir, 'fmclient', 'active-mod-profile.json');
+}
+
+function readActiveModsProfile(gameDir) {
+  try {
+    return JSON.parse(fs.readFileSync(getModsProfileStatePath(gameDir), 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function writeActiveModsProfile(gameDir, state) {
+  const statePath = getModsProfileStatePath(gameDir);
+  fs.mkdirSync(path.dirname(statePath), { recursive: true });
+  fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
+}
+
+function listModArchiveFiles(modsDir) {
+  try {
+    if (!fs.existsSync(modsDir)) return [];
+    return fs.readdirSync(modsDir).filter(file => /\.(jar|zip)$/i.test(file));
+  } catch {
+    return [];
+  }
+}
+
+function replaceModsDirectoryContents(sourceDir, targetDir, { exclude = [] } = {}) {
+  const excluded = new Set(exclude.map(name => name.toLowerCase()));
+  fs.mkdirSync(sourceDir, { recursive: true });
+  fs.mkdirSync(targetDir, { recursive: true });
+
+  for (const file of listModArchiveFiles(targetDir)) {
+    if (excluded.has(file.toLowerCase())) continue;
+    try { fs.unlinkSync(path.join(targetDir, file)); } catch {}
+  }
+
+  for (const file of listModArchiveFiles(sourceDir)) {
+    if (excluded.has(file.toLowerCase())) continue;
+    fs.copyFileSync(path.join(sourceDir, file), path.join(targetDir, file));
+  }
+}
+
+function activateProfileMods(gameDir, mcVersion, loader) {
+  const normalizedLoader = normalizeModLoader(loader);
+  const currentKey = getModsProfileKey(mcVersion, normalizedLoader);
+  const rootModsDir = path.join(gameDir, 'mods');
+  const currentProfileDir = getModsProfileDir(gameDir, mcVersion, normalizedLoader);
+  const activeProfile = readActiveModsProfile(gameDir);
+
+  fs.mkdirSync(rootModsDir, { recursive: true });
+  fs.mkdirSync(currentProfileDir, { recursive: true });
+
+  if (activeProfile?.key && activeProfile.key !== currentKey && activeProfile.mcVersion && activeProfile.loader) {
+    const previousProfileDir = getModsProfileDir(gameDir, activeProfile.mcVersion, activeProfile.loader);
+    replaceModsDirectoryContents(rootModsDir, previousProfileDir, { exclude: ['fmvisuals.jar'] });
+  } else {
+    const bootstrapMods = listModArchiveFiles(rootModsDir).filter(file => file.toLowerCase() !== 'fmvisuals.jar');
+    if (bootstrapMods.length && !listModArchiveFiles(currentProfileDir).length) {
+      replaceModsDirectoryContents(rootModsDir, currentProfileDir, { exclude: ['fmvisuals.jar'] });
+    }
+  }
+
+  replaceModsDirectoryContents(currentProfileDir, rootModsDir);
+  writeActiveModsProfile(gameDir, {
+    key: currentKey,
+    mcVersion,
+    loader: normalizedLoader,
+    updatedAt: Date.now(),
+  });
+
+  return {
+    profileModsDir: currentProfileDir,
+    modCount: listModArchiveFiles(currentProfileDir).length,
+  };
+}
+
+function buildModrinthVersionsUrl(projectId, mcVersion, loader) {
+  let url = `https://api.modrinth.com/v2/project/${projectId}/version`;
+  const params = new URLSearchParams();
+  if (mcVersion) params.set('game_versions', JSON.stringify([mcVersion]));
+  if (loader && loader !== 'all') params.set('loaders', JSON.stringify([normalizeModLoader(loader)]));
+  if (params.toString()) url += `?${params.toString()}`;
+  return url;
+}
+
+function pickPrimaryModFile(version) {
+  return version?.files?.find(file => file.primary) || version?.files?.[0] || null;
+}
+
+function serializeModVersion(version) {
+  const primaryFile = pickPrimaryModFile(version);
+  return {
+    id: version.id,
+    name: version.name || version.version_number || 'Без названия',
+    versionNumber: version.version_number || version.name || 'unknown',
+    published: version.date_published || '',
+    downloads: version.downloads || 0,
+    featured: !!version.featured,
+    loaders: Array.isArray(version.loaders) ? version.loaders : [],
+    gameVersions: Array.isArray(version.game_versions) ? version.game_versions : [],
+    fileName: primaryFile?.filename || '',
+  };
+}
+
+async function installLoaderProfile({ type, mcVersion, gameDir, javaExec, onProgress }) {
+  const sendP = typeof onProgress === 'function' ? onProgress : () => {};
+
+  if (type === 'fabric') {
+    sendP('Получение версий Fabric...', 5);
+    const loaders = await httpRequest('GET',
+      `https://meta.fabricmc.net/v2/versions/loader/${mcVersion}`,
+      { 'User-Agent': 'FMclient' }, null);
+    if (!Array.isArray(loaders) || !loaders.length)
+      throw new Error(`Fabric не поддерживает Minecraft ${mcVersion}`);
+
+    const loaderVersion = loaders[0].loader.version;
+    sendP(`Загрузка профиля Fabric ${loaderVersion}...`, 20);
+
+    const profileJson = await httpRequest('GET',
+      `https://meta.fabricmc.net/v2/versions/loader/${mcVersion}/${loaderVersion}/profile/json`,
+      { 'User-Agent': 'FMclient' }, null);
+
+    const versionId = profileJson.id;
+    const versionDir = path.join(gameDir, 'versions', versionId);
+    fs.mkdirSync(versionDir, { recursive: true });
+    fs.writeFileSync(path.join(versionDir, `${versionId}.json`), JSON.stringify(profileJson, null, 2));
+
+    const libs = profileJson.libraries || [];
+    const libTasks = [];
+    for (const lib of libs) {
+      if (!lib.name) continue;
+      const parts = lib.name.split(':');
+      if (parts.length < 3) continue;
+      const [grp, art, ver] = parts;
+      const libRelPath = `${grp.replace(/\./g, '/')}/${art}/${ver}/${art}-${ver}.jar`;
+      const libPath = path.join(gameDir, 'libraries', libRelPath);
+      if (!fs.existsSync(libPath) && lib.url) {
+        const dlUrl = `${lib.url.replace(/\/$/, '')}/${libRelPath}`;
+        libTasks.push({ libPath, dlUrl });
+      }
+    }
+
+    let done = 0;
+    for (const task of libTasks) {
+      done += 1;
+      sendP(`Библиотеки Fabric: ${done}/${libTasks.length}`, 20 + Math.round((done / Math.max(libTasks.length, 1)) * 70));
+      try { await downloadFile(task.dlUrl, task.libPath, null); } catch {}
+    }
+
+    fs.mkdirSync(path.join(gameDir, 'mods'), { recursive: true });
+    sendP('Fabric установлен!', 100);
+    return { versionId };
+  }
+
+  if (type === 'forge') {
+    sendP('Получение версий Forge...', 5);
+    const meta = await httpRequest('GET',
+      'https://files.minecraftforge.net/net/minecraftforge/forge/maven-metadata.json',
+      { 'User-Agent': 'FMclient' }, null);
+    const versions = meta[mcVersion];
+    if (!versions?.length) throw new Error(`Forge не поддерживает Minecraft ${mcVersion}`);
+    const forgeVersion = versions[versions.length - 1];
+
+    sendP(`Загрузка установщика Forge ${forgeVersion}...`, 10);
+    const installerUrl = `https://maven.minecraftforge.net/net/minecraftforge/forge/${forgeVersion}/forge-${forgeVersion}-installer.jar`;
+    const installerPath = path.join(gameDir, 'forge-installer.jar');
+    fs.mkdirSync(gameDir, { recursive: true });
+    await downloadFile(installerUrl, installerPath, (done, total) =>
+      sendP(`Forge installer: ${Math.round(done / total * 100)}%`, 10 + Math.round(done / total * 65)));
+
+    sendP('Установка Forge... (1–2 минуты)', 75);
+    await new Promise((resolve, reject) => {
+      const proc = execFile(javaExec, ['-jar', installerPath, '--installClient', gameDir], { cwd: gameDir });
+      proc.on('exit', code => {
+        try { fs.unlinkSync(installerPath); } catch {}
+        if (code === 0) resolve(); else reject(new Error(`Installer завершился с кодом ${code}`));
+      });
+      proc.on('error', reject);
+    });
+
+    fs.mkdirSync(path.join(gameDir, 'mods'), { recursive: true });
+    sendP('Forge установлен!', 100);
+    return { versionId: findInstalledLoaderProfileId(type, mcVersion, gameDir) };
+  }
+
+  if (type === 'neoforge') {
+    sendP('Получение версий NeoForge...', 5);
+    const metaXml = await new Promise((resolve, reject) => {
+      const req = https.get(
+        'https://maven.neoforged.net/releases/net/neoforged/neoforge/maven-metadata.xml',
+        { headers: { 'User-Agent': 'FMclient' } },
+        res => { let data = ''; res.on('data', chunk => data += chunk); res.on('end', () => resolve(data)); }
+      );
+      req.on('error', reject);
+    });
+
+    const allVersions = [...metaXml.matchAll(/<version>([^<]+)<\/version>/g)].map(match => match[1]);
+    const vp = mcVersion.split('.');
+    const nfPfx = vp.length >= 3 ? `${vp[1]}.${vp[2]}.` : `${vp[1]}.0.`;
+    const compatible = allVersions.filter(v => v.startsWith(nfPfx));
+    if (!compatible.length) throw new Error(`NeoForge не поддерживает Minecraft ${mcVersion}`);
+    const nfVersion = compatible[compatible.length - 1];
+
+    sendP(`Загрузка установщика NeoForge ${nfVersion}...`, 10);
+    const installerUrl = `https://maven.neoforged.net/releases/net/neoforged/neoforge/${nfVersion}/neoforge-${nfVersion}-installer.jar`;
+    const installerPath = path.join(gameDir, 'neoforge-installer.jar');
+    fs.mkdirSync(gameDir, { recursive: true });
+    await downloadFile(installerUrl, installerPath, (done, total) =>
+      sendP(`NeoForge installer: ${Math.round(done / total * 100)}%`, 10 + Math.round(done / total * 65)));
+
+    sendP('Установка NeoForge... (1–2 минуты)', 75);
+    await new Promise((resolve, reject) => {
+      const proc = execFile(javaExec, ['-jar', installerPath, '--installClient', gameDir], { cwd: gameDir });
+      proc.on('exit', code => {
+        try { fs.unlinkSync(installerPath); } catch {}
+        if (code === 0) resolve(); else reject(new Error(`Installer завершился с кодом ${code}`));
+      });
+      proc.on('error', reject);
+    });
+
+    fs.mkdirSync(path.join(gameDir, 'mods'), { recursive: true });
+    sendP('NeoForge установлен!', 100);
+    return { versionId: findInstalledLoaderProfileId(type, mcVersion, gameDir) };
+  }
+
+  throw new Error(`Неизвестный тип загрузчика: ${type}`);
+}
+
+async function ensureLoaderInstalled({ type, mcVersion, gameDir, javaExec, onProgress }) {
+  const existing = getInstalledLoaderStatus(type, mcVersion, gameDir);
+  if (existing.installed) {
+    if (typeof onProgress === 'function') {
+      onProgress(`${loaderLabel(type)} уже установлен`, 100);
+    }
+    return existing;
+  }
+
+  const installed = await installLoaderProfile({ type, mcVersion, gameDir, javaExec, onProgress });
+  const versionId = installed.versionId || findInstalledLoaderProfileId(type, mcVersion, gameDir);
+  return { installed: !!versionId, versionId };
+}
+
 // ── IPC: Install mod loader ───────────────────────────────────
 ipcMain.handle('install-loader', async (event, { type, mcVersion, gameDir: gameDirOpt, javaPath: javaPathOpt }) => {
   const gameDir  = resolveGameDir(gameDirOpt);
@@ -1578,122 +1878,8 @@ ipcMain.handle('install-loader', async (event, { type, mcVersion, gameDir: gameD
   };
 
   try {
-    if (type === 'fabric') {
-      sendP('Получение версий Fabric...', 5);
-      const loaders = await httpRequest('GET',
-        `https://meta.fabricmc.net/v2/versions/loader/${mcVersion}`,
-        { 'User-Agent': 'FMclient' }, null);
-      if (!Array.isArray(loaders) || !loaders.length)
-        throw new Error(`Fabric не поддерживает Minecraft ${mcVersion}`);
-
-      const loaderVersion = loaders[0].loader.version;
-      sendP(`Загрузка профиля Fabric ${loaderVersion}...`, 20);
-
-      const profileJson = await httpRequest('GET',
-        `https://meta.fabricmc.net/v2/versions/loader/${mcVersion}/${loaderVersion}/profile/json`,
-        { 'User-Agent': 'FMclient' }, null);
-
-      const versionId  = profileJson.id;
-      const versionDir = path.join(gameDir, 'versions', versionId);
-      fs.mkdirSync(versionDir, { recursive: true });
-      fs.writeFileSync(path.join(versionDir, `${versionId}.json`), JSON.stringify(profileJson, null, 2));
-
-      // Download Fabric-specific libraries
-      const libs     = profileJson.libraries || [];
-      const libTasks = [];
-      for (const lib of libs) {
-        if (!lib.name) continue;
-        const parts = lib.name.split(':');
-        if (parts.length < 3) continue;
-        const [grp, art, ver] = parts;
-        const libRelPath = `${grp.replace(/\./g, '/')}/${art}/${ver}/${art}-${ver}.jar`;
-        const libPath    = path.join(gameDir, 'libraries', libRelPath);
-        if (!fs.existsSync(libPath) && lib.url) {
-          const dlUrl = `${lib.url.replace(/\/$/, '')}/${libRelPath}`;
-          libTasks.push({ libPath, dlUrl });
-        }
-      }
-      let done = 0;
-      for (const task of libTasks) {
-        sendP(`Библиотеки Fabric: ${++done}/${libTasks.length}`, 20 + Math.round((done / libTasks.length) * 70));
-        try { await downloadFile(task.dlUrl, task.libPath, null); } catch {}
-      }
-
-      fs.mkdirSync(path.join(gameDir, 'mods'), { recursive: true });
-      sendP('Fabric установлен!', 100);
-      return { success: true, versionId };
-
-    } else if (type === 'forge') {
-      sendP('Получение версий Forge...', 5);
-      const meta = await httpRequest('GET',
-        'https://files.minecraftforge.net/net/minecraftforge/forge/maven-metadata.json',
-        { 'User-Agent': 'FMclient' }, null);
-      const versions = meta[mcVersion];
-      if (!versions?.length) throw new Error(`Forge не поддерживает Minecraft ${mcVersion}`);
-      const forgeVersion = versions[versions.length - 1];
-
-      sendP(`Загрузка установщика Forge ${forgeVersion}...`, 10);
-      const installerUrl  = `https://maven.minecraftforge.net/net/minecraftforge/forge/${forgeVersion}/forge-${forgeVersion}-installer.jar`;
-      const installerPath = path.join(gameDir, 'forge-installer.jar');
-      fs.mkdirSync(gameDir, { recursive: true });
-      await downloadFile(installerUrl, installerPath, (d, t) =>
-        sendP(`Forge installer: ${Math.round(d / t * 100)}%`, 10 + Math.round(d / t * 65)));
-
-      sendP('Установка Forge... (1–2 минуты)', 75);
-      await new Promise((resolve, reject) => {
-        const proc = execFile(javaExec, ['-jar', installerPath, '--installClient', gameDir], { cwd: gameDir });
-        proc.on('exit', code => {
-          try { fs.unlinkSync(installerPath); } catch {}
-          if (code === 0) resolve(); else reject(new Error(`Installer завершился с кодом ${code}`));
-        });
-        proc.on('error', reject);
-      });
-
-      fs.mkdirSync(path.join(gameDir, 'mods'), { recursive: true });
-      sendP('Forge установлен!', 100);
-      return { success: true };
-
-    } else if (type === 'neoforge') {
-      sendP('Получение версий NeoForge...', 5);
-      const metaXml = await new Promise((resolve, reject) => {
-        const req = https.get(
-          'https://maven.neoforged.net/releases/net/neoforged/neoforge/maven-metadata.xml',
-          { headers: { 'User-Agent': 'FMclient' } },
-          res => { let d = ''; res.on('data', c => d += c); res.on('end', () => resolve(d)); }
-        );
-        req.on('error', reject);
-      });
-
-      const allVersions = [...metaXml.matchAll(/<version>([^<]+)<\/version>/g)].map(m => m[1]);
-      const vp    = mcVersion.split('.');
-      const nfPfx = vp.length >= 3 ? `${vp[1]}.${vp[2]}.` : `${vp[1]}.0.`;
-      const compatible = allVersions.filter(v => v.startsWith(nfPfx));
-      if (!compatible.length) throw new Error(`NeoForge не поддерживает Minecraft ${mcVersion}`);
-      const nfVersion = compatible[compatible.length - 1];
-
-      sendP(`Загрузка установщика NeoForge ${nfVersion}...`, 10);
-      const installerUrl  = `https://maven.neoforged.net/releases/net/neoforged/neoforge/${nfVersion}/neoforge-${nfVersion}-installer.jar`;
-      const installerPath = path.join(gameDir, 'neoforge-installer.jar');
-      fs.mkdirSync(gameDir, { recursive: true });
-      await downloadFile(installerUrl, installerPath, (d, t) =>
-        sendP(`NeoForge installer: ${Math.round(d / t * 100)}%`, 10 + Math.round(d / t * 65)));
-
-      sendP('Установка NeoForge... (1–2 минуты)', 75);
-      await new Promise((resolve, reject) => {
-        const proc = execFile(javaExec, ['-jar', installerPath, '--installClient', gameDir], { cwd: gameDir });
-        proc.on('exit', code => {
-          try { fs.unlinkSync(installerPath); } catch {}
-          if (code === 0) resolve(); else reject(new Error(`Installer завершился с кодом ${code}`));
-        });
-        proc.on('error', reject);
-      });
-
-      fs.mkdirSync(path.join(gameDir, 'mods'), { recursive: true });
-      sendP('NeoForge установлен!', 100);
-      return { success: true };
-    }
-
-    throw new Error(`Неизвестный тип загрузчика: ${type}`);
+    const result = await installLoaderProfile({ type, mcVersion, gameDir, javaExec, onProgress: sendP });
+    return { success: true, ...result };
   } catch (e) {
     return { success: false, error: e.message };
   }
@@ -1702,20 +1888,10 @@ ipcMain.handle('install-loader', async (event, { type, mcVersion, gameDir: gameD
 // ── IPC: Check installed loaders ──────────────────────────────
 ipcMain.handle('check-loaders', (event, { mcVersion, gameDir: gameDirOpt }) => {
   const gameDir     = resolveGameDir(gameDirOpt);
-  const versionsDir = path.join(gameDir, 'versions');
-  let dirs = [];
-  try { dirs = fs.readdirSync(versionsDir); } catch {}
-
-  const fabricId   = dirs.find(d => d.startsWith('fabric-loader-') && d.endsWith(`-${mcVersion}`));
-  const forgeId    = dirs.find(d => d.startsWith(`${mcVersion}-forge`) || d.startsWith(`${mcVersion}-Forge`));
-  const vp         = mcVersion.split('.');
-  const nfPfx      = vp.length >= 3 ? `neoforge-${vp[1]}.${vp[2]}.` : null;
-  const neoforgeId = nfPfx ? dirs.find(d => d.startsWith(nfPfx)) : null;
-
   return {
-    fabric:   fabricId   ? { installed: true, versionId: fabricId   } : { installed: false },
-    forge:    forgeId    ? { installed: true, versionId: forgeId    } : { installed: false },
-    neoforge: neoforgeId ? { installed: true, versionId: neoforgeId } : { installed: false },
+    fabric:   getInstalledLoaderStatus('fabric', mcVersion, gameDir),
+    forge:    getInstalledLoaderStatus('forge', mcVersion, gameDir),
+    neoforge: getInstalledLoaderStatus('neoforge', mcVersion, gameDir),
   };
 });
 
@@ -1734,24 +1910,54 @@ ipcMain.handle('search-mods', async (event, { query, mcVersion, loader, offset =
   }
 });
 
+// ── IPC: Get compatible mod versions ──────────────────────────
+ipcMain.handle('get-mod-versions', async (event, { projectId, mcVersion, loader }) => {
+  try {
+    const url = buildModrinthVersionsUrl(projectId, mcVersion, loader);
+    const versions = await httpRequest('GET', url, { 'User-Agent': FMCLIENT_UA }, null);
+    if (!Array.isArray(versions) || !versions.length) {
+      return { success: true, versions: [] };
+    }
+
+    return {
+      success: true,
+      versions: versions.map(serializeModVersion),
+    };
+  } catch (e) {
+    return { success: false, error: e.message, versions: [] };
+  }
+});
+
 // ── IPC: Install mod ──────────────────────────────────────────
-ipcMain.handle('install-mod', async (event, { projectId, mcVersion, loader, gameDir: gameDirOpt }) => {
+ipcMain.handle('install-mod', async (event, { projectId, versionId, mcVersion, loader, gameDir: gameDirOpt }) => {
   const gameDir = resolveGameDir(gameDirOpt);
-  const modsDir = path.join(gameDir, 'mods');
+  const normalizedLoader = normalizeModLoader(loader);
+  const modsDir = getModsProfileDir(gameDir, mcVersion, normalizedLoader);
   fs.mkdirSync(modsDir, { recursive: true });
 
   try {
-    let url = `https://api.modrinth.com/v2/project/${projectId}/version`;
-    const p = new URLSearchParams();
-    if (mcVersion) p.set('game_versions', JSON.stringify([mcVersion]));
-    if (loader && loader !== 'all') p.set('loaders', JSON.stringify([loader]));
-    if (p.toString()) url += '?' + p.toString();
+    let selectedVersion = null;
+    if (versionId) {
+      selectedVersion = await httpRequest(
+        'GET',
+        `https://api.modrinth.com/v2/version/${versionId}`,
+        { 'User-Agent': FMCLIENT_UA },
+        null,
+      );
+    } else {
+      const versions = await httpRequest(
+        'GET',
+        buildModrinthVersionsUrl(projectId, mcVersion, normalizedLoader),
+        { 'User-Agent': FMCLIENT_UA },
+        null,
+      );
+      if (!Array.isArray(versions) || !versions.length) {
+        throw new Error('Совместимая версия мода не найдена для выбранной MC версии и загрузчика');
+      }
+      selectedVersion = versions[0];
+    }
 
-    const versions = await httpRequest('GET', url, { 'User-Agent': FMCLIENT_UA }, null);
-    if (!Array.isArray(versions) || !versions.length)
-      throw new Error('Совместимая версия мода не найдена для выбранной MC версии и загрузчика');
-
-    const primaryFile = versions[0].files?.find(f => f.primary) || versions[0].files?.[0];
+    const primaryFile = pickPrimaryModFile(selectedVersion);
     if (!primaryFile) throw new Error('Файл мода не найден');
 
     const destPath = path.join(modsDir, primaryFile.filename);
@@ -1759,16 +1965,20 @@ ipcMain.handle('install-mod', async (event, { projectId, mcVersion, loader, game
       if (mainWindow && !mainWindow.isDestroyed())
         mainWindow.webContents.send('mod-download-progress', { filename: primaryFile.filename, done, total });
     });
-    return { success: true, fileName: primaryFile.filename };
+    return {
+      success: true,
+      fileName: primaryFile.filename,
+      versionName: selectedVersion.version_number || selectedVersion.name || '',
+    };
   } catch (e) {
     return { success: false, error: e.message };
   }
 });
 
 // ── IPC: Get installed mods ───────────────────────────────────
-ipcMain.handle('get-installed-mods', (event, { gameDir: gameDirOpt }) => {
+ipcMain.handle('get-installed-mods', (event, { gameDir: gameDirOpt, mcVersion, loader }) => {
   const gameDir = resolveGameDir(gameDirOpt);
-  const modsDir = path.join(gameDir, 'mods');
+  const modsDir = getModsProfileDir(gameDir, mcVersion, normalizeModLoader(loader));
   try {
     if (!fs.existsSync(modsDir)) return { success: true, mods: [] };
     const mods = fs.readdirSync(modsDir)
@@ -1778,17 +1988,18 @@ ipcMain.handle('get-installed-mods', (event, { gameDir: gameDirOpt }) => {
         return { name: f, size: stat.size, modified: stat.mtimeMs };
       })
       .sort((a, b) => b.modified - a.modified);
-    return { success: true, mods };
+    return { success: true, mods, profileDir: modsDir };
   } catch (e) {
-    return { success: false, error: e.message, mods: [] };
+    return { success: false, error: e.message, mods: [], profileDir: modsDir };
   }
 });
 
 // ── IPC: Delete mod ───────────────────────────────────────────
-ipcMain.handle('delete-mod', (event, { filename, gameDir: gameDirOpt }) => {
+ipcMain.handle('delete-mod', (event, { filename, gameDir: gameDirOpt, mcVersion, loader }) => {
   const gameDir = resolveGameDir(gameDirOpt);
   try {
-    const modPath = path.join(gameDir, 'mods', filename);
+    const safeName = path.basename(filename);
+    const modPath = path.join(getModsProfileDir(gameDir, mcVersion, normalizeModLoader(loader)), safeName);
     if (fs.existsSync(modPath)) fs.unlinkSync(modPath);
     return { success: true };
   } catch (e) {
@@ -1797,9 +2008,9 @@ ipcMain.handle('delete-mod', (event, { filename, gameDir: gameDirOpt }) => {
 });
 
 // ── IPC: Open mods folder ─────────────────────────────────────
-ipcMain.handle('open-mods-folder', (event, { gameDir: gameDirOpt }) => {
+ipcMain.handle('open-mods-folder', (event, { gameDir: gameDirOpt, mcVersion, loader }) => {
   const gameDir = resolveGameDir(gameDirOpt);
-  const modsDir = path.join(gameDir, 'mods');
+  const modsDir = getModsProfileDir(gameDir, mcVersion, normalizeModLoader(loader));
   fs.mkdirSync(modsDir, { recursive: true });
   shell.openPath(modsDir);
   return { success: true };

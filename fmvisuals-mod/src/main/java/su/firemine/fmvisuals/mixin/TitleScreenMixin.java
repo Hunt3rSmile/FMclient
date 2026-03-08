@@ -111,7 +111,7 @@ public abstract class TitleScreenMixin extends Screen {
         this.textRenderer.draw(matrices, tagline, cx - subtitleWidth / 2.0f, logoY + 34.0f, 0xFF8A97A4);
 
         super.render(matrices, mouseX, mouseY, delta);
-        this.textRenderer.draw(matrices, "v1.2.2  |  FMclient", 4f, H - 10f, 0xFF5B6874);
+        this.textRenderer.draw(matrices, "v1.2.3  |  FMclient", 4f, H - 10f, 0xFF5B6874);
         ci.cancel();
     }
 

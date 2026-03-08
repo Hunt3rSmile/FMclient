@@ -370,7 +370,7 @@
           <div class="mods-hdr">
             <div>
               <h1 class="mods-hdr-title">Менеджер модов</h1>
-              <span class="mods-hdr-sub">Поиск и установка через Modrinth</span>
+              <span class="mods-hdr-sub">Профили модов по версии Minecraft и загрузчику через Modrinth</span>
             </div>
             <button class="mods-folder-btn" id="open-mods-folder-btn">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -380,38 +380,15 @@
             </button>
           </div>
 
-          <!-- Loaders -->
-          <div class="loaders-row" id="loaders-row">
-            <div class="loader-chip not-installed" id="lchip-fabric">
-              <div class="loader-chip-dot"></div>
-              <span class="loader-chip-name">Fabric</span>
-              <span class="loader-chip-ver" id="lver-fabric">не установлен</span>
-              <button class="loader-chip-btn" id="lbtn-fabric">Установить</button>
+          <div class="mods-profile-card">
+            <div class="mods-profile-copy">
+              <span class="mods-profile-kicker">Активный профиль модов</span>
+              <div class="mods-profile-title" id="mods-profile-title">Fabric • 1.21.11</div>
+              <div class="mods-profile-sub" id="mods-profile-sub">
+                FMclient сам подготовит выбранный загрузчик при первом запуске игры.
+              </div>
             </div>
-            <div class="loader-chip not-installed" id="lchip-forge">
-              <div class="loader-chip-dot"></div>
-              <span class="loader-chip-name">Forge</span>
-              <span class="loader-chip-ver" id="lver-forge">не установлен</span>
-              <button class="loader-chip-btn" id="lbtn-forge">Установить</button>
-            </div>
-            <div class="loader-chip not-installed" id="lchip-neoforge">
-              <div class="loader-chip-dot"></div>
-              <span class="loader-chip-name">NeoForge</span>
-              <span class="loader-chip-ver" id="lver-neoforge">не установлен</span>
-              <button class="loader-chip-btn" id="lbtn-neoforge">Установить</button>
-            </div>
-          </div>
-
-          <!-- Loader install progress -->
-          <div class="loader-install-progress" id="loader-install-progress" style="display:none">
-            <div class="lip-header">
-              <div class="lip-spinner"></div>
-              <span class="lip-msg" id="lip-msg">Установка...</span>
-              <span class="lip-pct" id="lip-pct">0%</span>
-            </div>
-            <div class="lip-bar-wrap">
-              <div class="lip-bar" id="lip-bar" style="width:0%"></div>
-            </div>
+            <div class="mods-profile-pill pending" id="mods-profile-status">Проверка...</div>
           </div>
 
           <!-- Search bar -->
@@ -422,22 +399,41 @@
               </svg>
               <input type="text" class="mods-search-input" id="mod-search-input" placeholder="Поиск модов... (Sodium, JEI, Iris...)">
             </div>
-            <select class="mods-filter" id="mod-filter-version">
-              <option value="1.21.4">1.21.4</option>
-              <option value="1.21.1">1.21.1</option>
-              <option value="1.20.4">1.20.4</option>
-              <option value="1.20.1">1.20.1</option>
-              <option value="1.19.4">1.19.4</option>
-              <option value="1.18.2">1.18.2</option>
-              <option value="1.16.5">1.16.5</option>
-              <option value="1.12.2">1.12.2</option>
-            </select>
-            <select class="mods-filter" id="mod-filter-loader">
-              <option value="all">Все загрузчики</option>
-              <option value="fabric">Fabric</option>
-              <option value="forge">Forge</option>
-              <option value="neoforge">NeoForge</option>
-            </select>
+            <div class="custom-select mods-filter-select" id="mods-version-selector">
+              <div class="select-selected mods-filter-selected" id="mods-version-selected">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="m9 18 6-6-6-6"/>
+                </svg>
+                <span id="mods-version-text">1.21.11</span>
+              </div>
+              <div class="select-options mods-filter-options" id="mods-version-options">
+                <div class="options-label">Версия Minecraft</div>
+                <div class="select-option active" data-value="1.21.11">1.21.11</div>
+                <div class="select-option" data-value="1.21.4">1.21.4</div>
+                <div class="select-option" data-value="1.21.1">1.21.1</div>
+                <div class="select-option" data-value="1.20.4">1.20.4</div>
+                <div class="select-option" data-value="1.20.1">1.20.1</div>
+                <div class="select-option" data-value="1.19.4">1.19.4</div>
+                <div class="select-option" data-value="1.18.2">1.18.2</div>
+                <div class="select-option" data-value="1.16.5">1.16.5</div>
+                <div class="select-option" data-value="1.12.2">1.12.2</div>
+                <div class="select-option" data-value="1.8.9">1.8.9</div>
+              </div>
+            </div>
+            <div class="custom-select mods-filter-select" id="mods-loader-selector">
+              <div class="select-selected mods-filter-selected" id="mods-loader-selected">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="m9 18 6-6-6-6"/>
+                </svg>
+                <span id="mods-loader-text">Fabric</span>
+              </div>
+              <div class="select-options mods-filter-options" id="mods-loader-options">
+                <div class="options-label">Загрузчик</div>
+                <div class="select-option active" data-value="fabric">Fabric</div>
+                <div class="select-option" data-value="forge">Forge</div>
+                <div class="select-option" data-value="neoforge">NeoForge</div>
+              </div>
+            </div>
             <button class="mods-search-btn" id="mods-search-btn">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -445,6 +441,7 @@
               Найти
             </button>
           </div>
+          <div class="mods-search-note">Поиск и установка идут для выбранного профиля. Fabric, Forge и NeoForge ставятся автоматически при запуске игры.</div>
 
           <!-- Scrollable body -->
           <div class="mods-body">
@@ -460,7 +457,7 @@
 
             <!-- Installed mods -->
             <div class="mods-section-hdr" style="margin-top:4px">
-              <span>Установленные моды</span>
+              <span>Моды выбранного профиля</span>
               <span class="mods-count-badge" id="mods-installed-count">0</span>
               <button class="mods-icon-btn" id="refresh-installed-btn" title="Обновить">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -470,7 +467,7 @@
               </button>
             </div>
             <div class="installed-mods-list" id="installed-mods-list">
-              <div class="mods-empty-hint">Папка модов пуста — установи моды через поиск выше</div>
+              <div class="mods-empty-hint">Профиль модов пока пуст — установи моды через поиск выше</div>
             </div>
 
           </div>
@@ -575,7 +572,7 @@
               <div class="about-logo">
                 <span class="logo-fm">FM</span><span class="logo-client">client</span>
               </div>
-              <div class="about-version">Версия 1.2.2</div>
+              <div class="about-version">Версия 1.2.3</div>
               <div class="about-desc">Современный, красивый лаунчер для Minecraft</div>
               <div class="about-tags">
                 <span class="about-tag">Electron</span>

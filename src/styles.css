@@ -1557,103 +1557,69 @@ html, body {
 }
 .mods-folder-btn:hover { color: var(--text); border-color: var(--border2); background: var(--surface2); }
 
-/* Loaders row */
-.loaders-row {
+/* Profile card */
+.mods-profile-card {
   display: flex;
-  gap: 8px;
-  padding: 0 28px 12px;
-  flex-shrink: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
   flex-wrap: wrap;
-}
-.loader-chip {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  transition: border-color 0.2s;
-}
-.loader-chip.installed {
-  border-color: rgba(168, 85, 247, 0.3);
-  background: rgba(168, 85, 247, 0.06);
-}
-.loader-chip-dot {
-  width: 7px; height: 7px;
-  border-radius: 50%;
-  background: var(--text-muted);
+  margin: 0 28px 12px;
+  padding: 16px 18px;
+  background:
+    radial-gradient(circle at top right, rgba(236, 72, 153, 0.12), transparent 42%),
+    linear-gradient(135deg, rgba(168, 85, 247, 0.12), rgba(15, 23, 42, 0.92));
+  border: 1px solid rgba(168, 85, 247, 0.22);
+  border-radius: 16px;
   flex-shrink: 0;
-  transition: background 0.3s;
 }
-.loader-chip.installed .loader-chip-dot {
-  background: var(--accent);
-  box-shadow: 0 0 6px var(--accent-glow);
-  animation: pulse-dot 2.5s infinite;
-}
-.loader-chip-name {
-  font-size: 13px;
-  font-weight: 700;
-}
-.loader-chip-ver {
-  font-size: 11px;
-  color: var(--text-dim);
-}
-.loader-chip.installed .loader-chip-ver { color: var(--accent); }
-.loader-chip-btn {
-  background: var(--accent-dim);
-  border: 1px solid var(--accent-dim2);
-  border-radius: 7px;
-  color: var(--accent);
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 4px 10px;
-  cursor: pointer;
-  transition: background 0.15s, opacity 0.15s;
-  white-space: nowrap;
-}
-.loader-chip-btn:hover { background: rgba(168, 85, 247, 0.18); }
-.loader-chip-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-
-/* Loader install progress */
-.loader-install-progress {
+.mods-profile-copy {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  margin: 0 28px 12px;
-  padding: 12px 16px;
-  background: rgba(168, 85, 247, 0.06);
-  border: 1px solid rgba(168, 85, 247, 0.2);
-  border-radius: var(--radius);
-  animation: fade-down 0.2s ease;
-  flex-shrink: 0;
+  gap: 6px;
+  min-width: 0;
 }
-.lip-header {
+.mods-profile-kicker {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: rgba(232, 232, 255, 0.58);
+}
+.mods-profile-title {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+}
+.mods-profile-sub {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  max-width: 620px;
+}
+.mods-profile-pill {
   display: flex;
   align-items: center;
-  gap: 10px;
-}
-.lip-spinner {
-  width: 16px; height: 16px;
-  border: 2px solid rgba(168,85,247,0.2);
-  border-top-color: #a855f7;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+  justify-content: center;
+  min-height: 36px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(168, 85, 247, 0.22);
+  background: rgba(9, 12, 28, 0.68);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
   flex-shrink: 0;
+  white-space: nowrap;
 }
-.lip-msg { flex: 1; font-size: 12.5px; color: var(--text-dim); }
-.lip-pct { font-size: 12px; font-weight: 700; color: var(--accent); min-width: 36px; text-align: right; }
-.lip-bar-wrap {
-  width: 100%; height: 3px;
-  background: rgba(255,255,255,0.06);
-  border-radius: 2px; overflow: hidden;
+.mods-profile-pill.pending {
+  color: #d8b4fe;
+  border-color: rgba(168, 85, 247, 0.28);
 }
-.lip-bar {
-  height: 100%; width: 0%;
-  background: linear-gradient(90deg, #a855f7, #ec4899);
-  border-radius: 2px;
-  transition: width 0.3s ease;
+.mods-profile-pill.installed {
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.28);
+  background: rgba(20, 44, 28, 0.66);
 }
 
 /* Search bar */
@@ -1663,6 +1629,12 @@ html, body {
   padding: 0 28px 14px;
   flex-shrink: 0;
   flex-wrap: wrap;
+}
+.mods-search-note {
+  padding: 0 28px 14px;
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.45;
 }
 .mods-search-input-wrap {
   flex: 1;
@@ -1694,20 +1666,19 @@ html, body {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.1);
 }
-.mods-filter {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  color: var(--text);
-  font-family: inherit;
-  font-size: 12.5px;
-  padding: 8px 12px;
-  outline: none;
-  cursor: pointer;
-  transition: border-color 0.2s;
-  -webkit-appearance: none;
+.mods-filter-select {
+  min-width: 148px;
 }
-.mods-filter:focus { border-color: var(--accent); }
+.mods-filter-selected {
+  min-width: 148px;
+  justify-content: space-between;
+  padding: 9px 12px;
+}
+.mods-filter-options {
+  top: calc(100% + 8px);
+  bottom: auto;
+  min-width: 100%;
+}
 .mods-search-btn {
   display: flex;
   align-items: center;
@@ -1857,8 +1828,12 @@ html, body {
   color: var(--text-dim);
   text-transform: capitalize;
 }
+.mod-card-actions {
+  display: flex;
+  gap: 8px;
+  padding: 10px 13px 13px;
+}
 .mod-card-install-btn {
-  margin: 10px 13px 13px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1873,9 +1848,110 @@ html, body {
   padding: 7px;
   cursor: pointer;
   transition: background 0.15s, opacity 0.15s;
+  flex: 1;
 }
 .mod-card-install-btn:hover { background: rgba(168, 85, 247, 0.18); }
 .mod-card-install-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.mod-card-secondary-btn {
+  flex-shrink: 0;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 10px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.mod-card-secondary-btn:hover {
+  border-color: rgba(168, 85, 247, 0.25);
+  color: var(--text);
+  background: rgba(168, 85, 247, 0.08);
+}
+.mod-card-secondary-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.mod-card-versions {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 13px 13px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+.mod-card-versions.open {
+  display: flex;
+}
+.mod-version-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+}
+.mod-version-main {
+  flex: 1;
+  min-width: 0;
+}
+.mod-version-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mod-version-meta {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.mod-version-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.mod-version-tag {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(168, 85, 247, 0.15);
+  background: rgba(168, 85, 247, 0.08);
+  color: #d8b4fe;
+}
+.mod-version-install-btn {
+  flex-shrink: 0;
+  background: rgba(74, 222, 128, 0.08);
+  border: 1px solid rgba(74, 222, 128, 0.18);
+  border-radius: 8px;
+  color: #4ade80;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 7px 10px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+}
+.mod-version-install-btn:hover {
+  background: rgba(74, 222, 128, 0.14);
+  border-color: rgba(74, 222, 128, 0.32);
+}
+.mod-version-install-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.mod-version-note {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  padding-top: 2px;
+}
 
 .mods-more-btn {
   display: block;

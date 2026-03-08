@@ -138,7 +138,7 @@ public class VisualsScreen extends Screen {
 
         String hint = "ESC - закрыть   RSHIFT - открыть в игре";
         textRenderer.draw(matrices, hint, x + PAD, y + H - 14, C_TEXT_FAINT);
-        textRenderer.draw(matrices, "v1.2.2", x + W - PAD - textRenderer.getWidth("v1.2.2"), y + H - 14, C_TEXT_MUTED);
+        textRenderer.draw(matrices, "v1.2.3", x + W - PAD - textRenderer.getWidth("v1.2.3"), y + H - 14, C_TEXT_MUTED);
 
         super.render(matrices, mouseX, mouseY, delta);
     }

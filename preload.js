@@ -38,6 +38,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onLoaderProgress:  (cb)  => ipcRenderer.on('loader-progress', (_, d) => cb(d)),
   // Mods (Modrinth)
   searchMods:        (opts) => ipcRenderer.invoke('search-mods', opts),
+  getModVersions:    (opts) => ipcRenderer.invoke('get-mod-versions', opts),
   installMod:        (opts) => ipcRenderer.invoke('install-mod', opts),
   getInstalledMods:  (opts) => ipcRenderer.invoke('get-installed-mods', opts),
   deleteMod:         (opts) => ipcRenderer.invoke('delete-mod', opts),

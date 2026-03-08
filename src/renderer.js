@@ -250,18 +250,30 @@ function makeSelect(selectorId, selectedId, textId, optionsId, storageKey, onSel
   const options  = document.getElementById(optionsId);
   let current    = localStorage.getItem(storageKey);
 
+  function applyValue(nextValue, { persist = true, notify = true } = {}) {
+    const opt = options.querySelector(`[data-value="${nextValue}"]`);
+    if (!opt) return false;
+
+    current = nextValue;
+    text.textContent = opt.textContent;
+    options.querySelectorAll('.select-option').forEach(o => o.classList.remove('active'));
+    opt.classList.add('active');
+    options.classList.remove('open');
+    selected.classList.remove('open');
+
+    if (persist) localStorage.setItem(storageKey, current);
+    if (notify && onSelect) onSelect(current);
+    return true;
+  }
+
   if (current) {
-    const opt = options.querySelector(`[data-value="${current}"]`);
-    if (opt) {
-      text.textContent = opt.textContent;
-      options.querySelectorAll('.select-option').forEach(o => o.classList.remove('active'));
-      opt.classList.add('active');
-    } else {
+    if (!applyValue(current, { persist: false, notify: false })) {
       current = null;
     }
   }
   if (!current) {
     current = options.querySelector('.select-option.active')?.dataset.value || '';
+    if (current) applyValue(current, { persist: false, notify: false });
   }
 
   selected.addEventListener('click', e => {
@@ -275,17 +287,10 @@ function makeSelect(selectorId, selectedId, textId, optionsId, storageKey, onSel
     }
   });
 
-  options.querySelectorAll('.select-option').forEach(opt => {
-    opt.addEventListener('click', () => {
-      current = opt.dataset.value;
-      text.textContent = opt.textContent;
-      options.querySelectorAll('.select-option').forEach(o => o.classList.remove('active'));
-      opt.classList.add('active');
-      options.classList.remove('open');
-      selected.classList.remove('open');
-      localStorage.setItem(storageKey, current);
-      if (onSelect) onSelect(current);
-    });
+  options.addEventListener('click', event => {
+    const opt = event.target.closest('.select-option');
+    if (!opt || !options.contains(opt)) return;
+    applyValue(opt.dataset.value);
   });
 
   document.addEventListener('click', () => {
@@ -293,7 +298,10 @@ function makeSelect(selectorId, selectedId, textId, optionsId, storageKey, onSel
     selected.classList.remove('open');
   });
 
-  return () => current;
+  const getter = () => current;
+  getter.setValue = (value, opts) => applyValue(value, opts);
+  getter.getLabel = () => text.textContent;
+  return getter;
 }
 
 const getVersion = makeSelect(
@@ -302,6 +310,7 @@ const getVersion = makeSelect(
   v => {
     document.getElementById('stat-version').textContent = v;
     refreshDeleteBtn(v);
+    syncModsProfileFromLaunch({ refreshSearch: modsResultsWrap?.style.display === 'block' });
   }
 );
 document.getElementById('stat-version').textContent = getVersion();
@@ -357,7 +366,8 @@ deleteVersionBtn.addEventListener('click', async (e) => {
 
 const getType = makeSelect(
   'type-selector', 'type-selected', 'type-text', 'type-options',
-  'mc_loader', null
+  'mc_loader',
+  () => syncModsProfileFromLaunch({ refreshSearch: modsResultsWrap?.style.display === 'block' })
 );
 
 
@@ -584,6 +594,7 @@ const lpStepIcon = document.getElementById('lp-step-icon');
 
 const STEP_LABELS = {
   manifest:  'Манифест версий',
+  loader:    'Загрузчик',
   client:    'Клиент Minecraft',
   libraries: 'Библиотеки',
   assets:    'Ресурсы',
@@ -652,13 +663,33 @@ window.electronAPI?.onGameExit(data => {
 
 
 // ── Debug Mode ───────────────────────────────────────────────
+function readToggleState(key, fallback = false) {
+  const stored = localStorage.getItem(`toggle_${key}`);
+  if (stored === 'on') return true;
+  if (stored === 'off') return false;
+
+  // Legacy debug toggle used boolean strings without the common prefix.
+  const legacy = localStorage.getItem(key);
+  if (legacy === 'true') return true;
+  if (legacy === 'false') return false;
+
+  return fallback;
+}
+
+function writeToggleState(key, enabled) {
+  localStorage.setItem(`toggle_${key}`, enabled ? 'on' : 'off');
+  if (key === 'debugMode') {
+    localStorage.setItem('debugMode', enabled ? 'true' : 'false');
+  }
+}
+
 const debugToggle  = document.getElementById('debug-mode-toggle');
 const debugPanel   = document.getElementById('debug-panel');
 const debugLogArea = document.getElementById('debug-log-area');
 const debugClearBtn = document.getElementById('debug-clear-btn');
 const debugCopyBtn  = document.getElementById('debug-copy-btn');
 
-let debugEnabled = localStorage.getItem('debugMode') === 'true';
+let debugEnabled = readToggleState('debugMode', false);
 
 function applyDebugState() {
   debugPanel.style.display = debugEnabled ? 'flex' : 'none';
@@ -669,7 +700,7 @@ applyDebugState();
 
 debugToggle.addEventListener('click', () => {
   debugEnabled = !debugEnabled;
-  localStorage.setItem('debugMode', debugEnabled);
+  writeToggleState('debugMode', debugEnabled);
   applyDebugState();
 });
 
@@ -768,7 +799,7 @@ playBtn.addEventListener('click', async () => {
   showToast(`Запуск Minecraft ${version}...`);
 
   try {
-    const hideOnLaunch = localStorage.getItem('toggle_hideOnLaunch') !== 'off';
+    const hideOnLaunch = readToggleState('hideOnLaunch', true);
     const result = await window.electronAPI?.launchGame({ version, type, username, ram, gameDir, javaPath, hideOnLaunch });
     if (!result?.success) {
       showToast(result?.message || 'Ошибка запуска');
@@ -787,10 +818,13 @@ playBtn.addEventListener('click', async () => {
 // ── Settings: Toggles ────────────────────────────────────────
 document.querySelectorAll('.toggle').forEach(toggle => {
   const key = toggle.dataset.key;
-  if (key && localStorage.getItem(`toggle_${key}`) === 'on') toggle.classList.add('on');
+  if (!key || key === 'debugMode') return;
+
+  toggle.classList.toggle('on', readToggleState(key, toggle.classList.contains('on')));
   toggle.addEventListener('click', () => {
-    toggle.classList.toggle('on');
-    if (key) localStorage.setItem(`toggle_${key}`, toggle.classList.contains('on') ? 'on' : 'off');
+    const enabled = !toggle.classList.contains('on');
+    toggle.classList.toggle('on', enabled);
+    writeToggleState(key, enabled);
   });
 });
 
@@ -833,14 +867,32 @@ function formatBytes(b) {
   return b + ' B';
 }
 
+function formatDateShort(input) {
+  if (!input) return '';
+  try {
+    return new Intl.DateTimeFormat('ru-RU', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    }).format(new Date(input));
+  } catch {
+    return '';
+  }
+}
+
+const LOADER_LABELS = {
+  fabric: 'Fabric',
+  forge: 'Forge',
+  neoforge: 'NeoForge',
+};
+
 
 // ── Mods Tab ─────────────────────────────────────────────────
 let modsSearchOffset = 0;
 let modsSearchTotal  = 0;
+let modsProfileRequestId = 0;
 
 const modSearchInput      = document.getElementById('mod-search-input');
-const modFilterVersion    = document.getElementById('mod-filter-version');
-const modFilterLoader     = document.getElementById('mod-filter-loader');
 const modsSearchBtn       = document.getElementById('mods-search-btn');
 const modsGrid            = document.getElementById('mods-grid');
 const modsResultsWrap     = document.getElementById('mods-results-wrap');
@@ -850,109 +902,139 @@ const installedModsList   = document.getElementById('installed-mods-list');
 const modsInstalledCount  = document.getElementById('mods-installed-count');
 const refreshInstalledBtn = document.getElementById('refresh-installed-btn');
 const openModsFolderBtn   = document.getElementById('open-mods-folder-btn');
+const modsProfileTitle    = document.getElementById('mods-profile-title');
+const modsProfileSub      = document.getElementById('mods-profile-sub');
+const modsProfileStatus   = document.getElementById('mods-profile-status');
+let getModsVersion;
+let getModsLoader;
 
-// Sync version filter with currently selected MC version
-if (modFilterVersion) {
-  const cur = localStorage.getItem('mc_version') || '1.21.4';
-  const opt = modFilterVersion.querySelector(`option[value="${cur}"]`);
-  if (opt) modFilterVersion.value = cur;
+function getModsProfile() {
+  return {
+    mcVersion: getModsVersion?.() || getVersion() || '1.21.11',
+    loader: getModsLoader?.() || getType() || 'fabric',
+  };
 }
 
-// ── Loader chips ─────────────────────────────────────────────
-async function checkLoaderChips() {
-  const mcVersion = modFilterVersion?.value || localStorage.getItem('mc_version') || '1.21.1';
-  const gameDir   = document.getElementById('game-dir')?.value?.trim() || '';
-  const result    = await window.electronAPI?.checkLoaders({ mcVersion, gameDir });
-  if (!result) return;
-  setLoaderChip('fabric',   result.fabric);
-  setLoaderChip('forge',    result.forge);
-  setLoaderChip('neoforge', result.neoforge);
-}
+function populateModsVersionOptions() {
+  const optionsWrap = document.getElementById('mods-version-options');
+  if (!optionsWrap) return;
 
-function setLoaderChip(loader, status) {
-  const chip = document.getElementById(`lchip-${loader}`);
-  const ver  = document.getElementById(`lver-${loader}`);
-  const btn  = document.getElementById(`lbtn-${loader}`);
-  if (!chip || !ver || !btn) return;
-  if (status.installed) {
-    chip.classList.add('installed');
-    chip.classList.remove('not-installed');
-    const shortVer = (status.versionId || '').split('-').pop() || 'установлен';
-    ver.textContent = shortVer;
-    btn.textContent = '✓ Активен';
-    btn.disabled = true;
-  } else {
-    chip.classList.remove('installed');
-    chip.classList.add('not-installed');
-    ver.textContent = 'не установлен';
-    btn.textContent = 'Установить';
-    btn.disabled = false;
+  const options = Array.from(document.querySelectorAll('#version-options .select-option'));
+  if (!options.length) return;
+
+  optionsWrap.innerHTML = [
+    '<div class="options-label">Версия Minecraft</div>',
+    ...options.map(opt => `<div class="select-option" data-value="${opt.dataset.value}">${escapeHtml(opt.textContent)}</div>`),
+  ].join('');
+
+  if (getModsVersion) {
+    const current = options.some(opt => opt.dataset.value === getVersion())
+      ? getVersion()
+      : options[0].dataset.value;
+    getModsVersion.setValue(current, { persist: false, notify: false });
   }
 }
 
-async function installLoader(type) {
-  const mcVersion = modFilterVersion?.value || localStorage.getItem('mc_version') || '1.21.1';
-  const gameDir   = document.getElementById('game-dir')?.value?.trim() || '';
-  const javaPath  = document.getElementById('java-path')?.value?.trim() || '';
+function handleModsVersionChange() {
+  if (getModsVersion() !== getVersion()) {
+    getVersion.setValue(getModsVersion());
+    return;
+  }
+  syncModsProfileFromLaunch({ refreshSearch: modsResultsWrap?.style.display === 'block' });
+}
 
-  ['fabric','forge','neoforge'].forEach(l => {
-    const b = document.getElementById(`lbtn-${l}`);
-    if (b) b.disabled = true;
-  });
+function handleModsLoaderChange() {
+  if (getModsLoader() !== getType()) {
+    getType.setValue(getModsLoader());
+    return;
+  }
+  syncModsProfileFromLaunch({ refreshSearch: modsResultsWrap?.style.display === 'block' });
+}
 
-  const progressWrap = document.getElementById('loader-install-progress');
-  progressWrap.style.display = 'flex';
+getModsVersion = makeSelect(
+  'mods-version-selector', 'mods-version-selected', 'mods-version-text', 'mods-version-options',
+  'mods_profile_version',
+  handleModsVersionChange
+);
 
-  const result = await window.electronAPI?.installLoader({ type, mcVersion, gameDir, javaPath });
+getModsLoader = makeSelect(
+  'mods-loader-selector', 'mods-loader-selected', 'mods-loader-text', 'mods-loader-options',
+  'mods_profile_loader',
+  handleModsLoaderChange
+);
 
-  progressWrap.style.display = 'none';
-  document.getElementById('lip-bar').style.width = '0%';
+async function refreshModsProfileStatus() {
+  const requestId = ++modsProfileRequestId;
+  const { mcVersion, loader } = getModsProfile();
+  const loaderName = LOADER_LABELS[loader] || loader;
 
-  if (result?.success) {
-    showToast(`${type.charAt(0).toUpperCase() + type.slice(1)} установлен!`);
-    checkLoaderChips();
-  } else {
-    showToast(result?.error || `Ошибка установки ${type}`);
-    ['fabric','forge','neoforge'].forEach(l => {
-      const b = document.getElementById(`lbtn-${l}`);
-      if (b) b.disabled = false;
-    });
-    checkLoaderChips();
+  if (modsProfileTitle) modsProfileTitle.textContent = `${loaderName} • ${mcVersion}`;
+  if (modsProfileStatus) {
+    modsProfileStatus.className = 'mods-profile-pill pending';
+    modsProfileStatus.textContent = 'Проверка...';
+  }
+  if (modsProfileSub) {
+    modsProfileSub.textContent = `Моды скачиваются отдельно для профиля ${mcVersion} / ${loaderName}. ${loaderName} установится автоматически при первом запуске игры, если его ещё нет.`;
+  }
+
+  const gameDir = document.getElementById('game-dir')?.value?.trim() || '';
+  const result = await window.electronAPI?.checkLoaders({ mcVersion, gameDir });
+  if (requestId !== modsProfileRequestId) return;
+
+  const status = result?.[loader];
+  if (status?.installed) {
+    const shortVer = (status.versionId || '').split('-').pop() || 'готов';
+    if (modsProfileStatus) {
+      modsProfileStatus.className = 'mods-profile-pill installed';
+      modsProfileStatus.textContent = `Установлен • ${shortVer}`;
+    }
+    if (modsProfileSub) {
+      modsProfileSub.textContent = `Моды скачиваются отдельно для профиля ${mcVersion} / ${loaderName}. ${loaderName} уже установлен и будет использован при следующем запуске игры.`;
+    }
+    return;
+  }
+
+  if (modsProfileStatus) {
+    modsProfileStatus.className = 'mods-profile-pill pending';
+    modsProfileStatus.textContent = 'Автоустановка при запуске';
   }
 }
 
-window.electronAPI?.onLoaderProgress(({ msg, pct }) => {
-  const m = document.getElementById('lip-msg');
-  const p = document.getElementById('lip-pct');
-  const b = document.getElementById('lip-bar');
-  if (m) m.textContent = msg;
-  if (p) p.textContent = `${pct}%`;
-  if (b) b.style.width = `${pct}%`;
-});
+function syncModsProfileFromLaunch({ refreshSearch = false } = {}) {
+  if (getModsVersion && getModsVersion() !== getVersion()) {
+    getModsVersion.setValue(getVersion(), { notify: false });
+  }
+  if (getModsLoader && getModsLoader() !== getType()) {
+    getModsLoader.setValue(getType(), { notify: false });
+  }
 
-document.getElementById('lbtn-fabric')?.addEventListener('click',   () => installLoader('fabric'));
-document.getElementById('lbtn-forge')?.addEventListener('click',    () => installLoader('forge'));
-document.getElementById('lbtn-neoforge')?.addEventListener('click', () => installLoader('neoforge'));
+  refreshModsProfileStatus();
+  loadInstalledMods();
+
+  if (refreshSearch && modsResultsWrap?.style.display === 'block') {
+    searchMods(true);
+  }
+}
 
 // Open mods tab → refresh
 document.querySelector('[data-tab="mods"]')?.addEventListener('click', () => {
-  checkLoaderChips();
-  loadInstalledMods();
+  syncModsProfileFromLaunch({ refreshSearch: false });
 });
 
 // ── Modrinth search ───────────────────────────────────────────
 async function searchMods(reset = true) {
+  const { mcVersion, loader } = getModsProfile();
+  const loaderName = LOADER_LABELS[loader] || loader;
+
   if (reset) {
     modsSearchOffset = 0;
     if (modsGrid) modsGrid.innerHTML = '<div class="mods-loading"><div class="lp-spinner"></div></div>';
   }
 
-  const query     = modSearchInput?.value?.trim() || '';
-  const mcVersion = modFilterVersion?.value || '1.21.1';
-  const loader    = modFilterLoader?.value  || 'all';
+  const query = modSearchInput?.value?.trim() || '';
 
   if (modsResultsWrap) modsResultsWrap.style.display = 'block';
-  if (modsResultsTitle) modsResultsTitle.textContent = 'Поиск...';
+  if (modsResultsTitle) modsResultsTitle.textContent = `Поиск для ${mcVersion} / ${loaderName}...`;
 
   const result = await window.electronAPI?.searchMods({ query, mcVersion, loader, offset: modsSearchOffset });
 
@@ -962,7 +1044,9 @@ async function searchMods(reset = true) {
   }
 
   modsSearchTotal = result.total;
-  if (modsResultsTitle) modsResultsTitle.textContent = `Найдено ${result.total.toLocaleString()} модов`;
+  if (modsResultsTitle) {
+    modsResultsTitle.textContent = `Найдено ${result.total.toLocaleString()} модов для ${mcVersion} / ${loaderName}`;
+  }
 
   if (reset && modsGrid) modsGrid.innerHTML = '';
 
@@ -1007,52 +1091,154 @@ function createModCard(mod) {
       <span class="mod-card-dl">↓ ${formatDownloads(mod.downloads || 0)}</span>
       ${(mod.categories || []).slice(0, 2).map(c => `<span class="mod-cat">${escapeHtml(c)}</span>`).join('')}
     </div>
-    <button class="mod-card-install-btn" data-id="${mod.project_id}">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-      </svg>
-      Скачать
-    </button>
+    <div class="mod-card-actions">
+      <button class="mod-card-install-btn" data-id="${mod.project_id}">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Скачать последнюю
+      </button>
+      <button class="mod-card-secondary-btn" type="button">Версии</button>
+    </div>
+    <div class="mod-card-versions"></div>
   `;
 
-  card.querySelector('.mod-card-install-btn').addEventListener('click', async (e) => {
-    const btn       = e.currentTarget;
-    const projectId = btn.dataset.id;
-    const mcVersion = modFilterVersion?.value || '1.21.1';
-    const loader    = modFilterLoader?.value  || 'all';
-    const gameDir   = document.getElementById('game-dir')?.value?.trim() || '';
+  const installBtn = card.querySelector('.mod-card-install-btn');
+  const versionsBtn = card.querySelector('.mod-card-secondary-btn');
+  const versionsWrap = card.querySelector('.mod-card-versions');
 
-    btn.disabled = true;
-    btn.innerHTML = '<div class="lp-spinner" style="width:13px;height:13px;border-width:2px"></div>';
+  installBtn.addEventListener('click', () =>
+    installModFromButton(installBtn, { projectId: mod.project_id, doneLabel: '✓ Установлен' })
+  );
 
-    const result = await window.electronAPI?.installMod({ projectId, mcVersion, loader, gameDir });
+  versionsBtn.addEventListener('click', async () => {
+    const isOpen = versionsWrap.classList.contains('open');
+    versionsWrap.classList.toggle('open', !isOpen);
+    versionsBtn.textContent = isOpen ? 'Версии' : 'Скрыть';
 
-    if (result?.success) {
-      btn.innerHTML = '✓ Установлен';
-      btn.style.cssText = 'background:rgba(74,222,128,0.1);border-color:rgba(74,222,128,0.3);color:#4ade80;';
-      showToast(`${result.fileName} установлен`);
-      loadInstalledMods();
-    } else {
-      btn.disabled = false;
-      btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Скачать`;
-      showToast(result?.error || 'Ошибка установки');
+    if (isOpen || versionsWrap.dataset.loaded === '1') return;
+
+    versionsWrap.innerHTML = '<div class="mods-loading"><div class="lp-spinner"></div></div>';
+    versionsBtn.disabled = true;
+
+    const { mcVersion, loader } = getModsProfile();
+    const result = await window.electronAPI?.getModVersions({
+      projectId: mod.project_id,
+      mcVersion,
+      loader,
+    });
+
+    versionsBtn.disabled = false;
+
+    if (!result?.success) {
+      versionsWrap.innerHTML = `<div class="mods-empty-hint">${result?.error || 'Не удалось получить версии'}</div>`;
+      return;
     }
+
+    renderModVersionRows(versionsWrap, mod.project_id, result.versions || []);
+    versionsWrap.dataset.loaded = '1';
   });
 
   return card;
 }
 
+function markInstallButtonDone(btn, label) {
+  btn.disabled = true;
+  btn.textContent = label;
+  btn.style.background = 'rgba(74,222,128,0.1)';
+  btn.style.borderColor = 'rgba(74,222,128,0.3)';
+  btn.style.color = '#4ade80';
+}
+
+async function installModFromButton(btn, { projectId, versionId = null, doneLabel = 'Готово' }) {
+  const { mcVersion, loader } = getModsProfile();
+  const gameDir = document.getElementById('game-dir')?.value?.trim() || '';
+  const previousHtml = btn.innerHTML;
+
+  btn.disabled = true;
+  btn.innerHTML = '<div class="lp-spinner" style="width:13px;height:13px;border-width:2px"></div>';
+
+  const result = await window.electronAPI?.installMod({ projectId, versionId, mcVersion, loader, gameDir });
+
+  if (result?.success) {
+    markInstallButtonDone(btn, doneLabel);
+    showToast(result.versionName ? `${result.fileName} (${result.versionName}) установлен` : `${result.fileName} установлен`);
+    loadInstalledMods();
+    return;
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = previousHtml;
+  showToast(result?.error || 'Ошибка установки');
+}
+
+function renderModVersionRows(container, projectId, versions) {
+  const visibleVersions = versions.slice(0, 8);
+  container.innerHTML = '';
+
+  if (!visibleVersions.length) {
+    container.innerHTML = '<div class="mods-empty-hint">Для этого профиля доступна только последняя версия или список пуст.</div>';
+    return;
+  }
+
+  visibleVersions.forEach(version => {
+    const row = document.createElement('div');
+    row.className = 'mod-version-row';
+
+    const versionTags = [
+      ...(version.gameVersions || []).slice(0, 2),
+      ...(version.loaders || []).slice(0, 2).map(loader => LOADER_LABELS[loader] || loader),
+    ];
+
+    row.innerHTML = `
+      <div class="mod-version-main">
+        <div class="mod-version-title">${escapeHtml(version.versionNumber || version.name)}</div>
+        <div class="mod-version-meta">
+          ${version.fileName ? escapeHtml(version.fileName) : 'Файл не указан'}
+          ${version.published ? ` • ${formatDateShort(version.published)}` : ''}
+        </div>
+        <div class="mod-version-tags">
+          ${versionTags.map(tag => `<span class="mod-version-tag">${escapeHtml(tag)}</span>`).join('')}
+        </div>
+      </div>
+      <button class="mod-version-install-btn" type="button">Скачать</button>
+    `;
+
+    row.querySelector('.mod-version-install-btn')?.addEventListener('click', (event) =>
+      installModFromButton(event.currentTarget, {
+        projectId,
+        versionId: version.id,
+        doneLabel: 'Готово',
+      })
+    );
+
+    container.appendChild(row);
+  });
+
+  if (versions.length > visibleVersions.length) {
+    const note = document.createElement('div');
+    note.className = 'mod-version-note';
+    note.textContent = `Показаны ${visibleVersions.length} последних версий из ${versions.length}`;
+    container.appendChild(note);
+  }
+}
+
 modsSearchBtn?.addEventListener('click', () => searchMods(true));
 modSearchInput?.addEventListener('keydown', e => { if (e.key === 'Enter') searchMods(true); });
 modsMoreBtn?.addEventListener('click', () => searchMods(false));
+document.getElementById('game-dir')?.addEventListener('change', () => syncModsProfileFromLaunch({ refreshSearch: false }));
 
 // ── Installed mods ────────────────────────────────────────────
 async function loadInstalledMods() {
   const gameDir = document.getElementById('game-dir')?.value?.trim() || '';
-  const result  = await window.electronAPI?.getInstalledMods({ gameDir });
+  const { mcVersion, loader } = getModsProfile();
+  const loaderName = LOADER_LABELS[loader] || loader;
+  const result  = await window.electronAPI?.getInstalledMods({ gameDir, mcVersion, loader });
 
   if (!result?.success || !result.mods.length) {
-    if (installedModsList) installedModsList.innerHTML = '<div class="mods-empty-hint">Папка модов пуста — установи моды через поиск выше</div>';
+    if (installedModsList) {
+      installedModsList.innerHTML = `<div class="mods-empty-hint">Профиль ${mcVersion} / ${loaderName} пока пуст — установи моды через поиск выше</div>`;
+    }
     if (modsInstalledCount) modsInstalledCount.textContent = '0';
     return;
   }
@@ -1081,7 +1267,13 @@ async function loadInstalledMods() {
       btn.addEventListener('click', async () => {
         const name    = btn.dataset.name;
         const gameDir2 = document.getElementById('game-dir')?.value?.trim() || '';
-        const r = await window.electronAPI?.deleteMod({ filename: name, gameDir: gameDir2 });
+        const profile = getModsProfile();
+        const r = await window.electronAPI?.deleteMod({
+          filename: name,
+          gameDir: gameDir2,
+          mcVersion: profile.mcVersion,
+          loader: profile.loader,
+        });
         if (r?.success) { showToast(`${name} удалён`); loadInstalledMods(); }
         else showToast(r?.error || 'Ошибка удаления');
       });
@@ -1092,5 +1284,9 @@ async function loadInstalledMods() {
 refreshInstalledBtn?.addEventListener('click', loadInstalledMods);
 openModsFolderBtn?.addEventListener('click', () => {
   const gameDir = document.getElementById('game-dir')?.value?.trim() || '';
-  window.electronAPI?.openModsFolder({ gameDir });
+  const profile = getModsProfile();
+  window.electronAPI?.openModsFolder({ gameDir, mcVersion: profile.mcVersion, loader: profile.loader });
 });
+
+populateModsVersionOptions();
+syncModsProfileFromLaunch({ refreshSearch: false });

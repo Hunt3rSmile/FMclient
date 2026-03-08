@@ -3,7 +3,7 @@
 
 const fs   = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 const os   = require('os');
 
 const REMOVE_DEPS = ['http-parser'];
@@ -17,8 +17,8 @@ const tmpDir   = fs.mkdtempSync(path.join(os.tmpdir(), 'fmclient-pkg-'));
 
 console.log(`Fixing dependencies in ${pkg}...`);
 
-// Extract
-execSync(`tar -xJf "${pkgPath}" -C "${tmpDir}"`);
+// Extract with bsdtar so pacman metadata files keep their exact names
+execFileSync('bsdtar', ['-xJf', pkgPath, '-C', tmpDir], { stdio: 'inherit' });
 
 // Patch .PKGINFO
 const pkgInfoPath = path.join(tmpDir, '.PKGINFO');
@@ -30,9 +30,17 @@ for (const dep of REMOVE_DEPS) {
 }
 fs.writeFileSync(pkgInfoPath, pkgInfo);
 
-// Repack
+// Repack without the leading "./" prefix. pacman expects metadata entries
+// like ".PKGINFO" at the archive root and may reject "./.PKGINFO".
+const rootEntries = fs.readdirSync(tmpDir).sort((a, b) => {
+  const aMeta = a.startsWith('.') ? 0 : 1;
+  const bMeta = b.startsWith('.') ? 0 : 1;
+  if (aMeta !== bMeta) return aMeta - bMeta;
+  return a.localeCompare(b);
+});
+
 fs.unlinkSync(pkgPath);
-execSync(`tar -cJf "${pkgPath}" -C "${tmpDir}" .`);
+execFileSync('bsdtar', ['-cJf', pkgPath, '-C', tmpDir, ...rootEntries], { stdio: 'inherit' });
 
 // Cleanup
 fs.rmSync(tmpDir, { recursive: true });
