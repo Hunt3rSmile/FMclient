@@ -59,6 +59,12 @@ public final class FMRenderer extends DrawableHelper {
         fill(m, x1, y1, x2, y2, color);
     }
 
+    public static void pill(MatrixStack m, int x, int y, int w, int h, int color) {
+        fill(m, x + 3, y, x + w - 3, y + h, color);
+        fill(m, x + 1, y + 1, x + w - 1, y + h - 1, color);
+        fill(m, x, y + 3, x + w, y + h - 3, color);
+    }
+
     // ── Particle network: update + draw ───────────────────────────────────
     public static void drawNetwork(MatrixStack matrices, int W, int H) {
         // --- update positions ---

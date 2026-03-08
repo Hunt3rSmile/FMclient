@@ -1,5 +1,6 @@
 package su.firemine.fmvisuals.mixin;
 
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.screen.TitleScreen;
@@ -18,10 +19,16 @@ public class ScreenMixin {
     @Shadow protected int height;
     @Shadow public TextRenderer textRenderer;
 
+    private boolean fmShouldUseCustomBackground() {
+        if ((Object) this instanceof TitleScreen) return false;
+        MinecraftClient client = MinecraftClient.getInstance();
+        return client != null && client.world == null;
+    }
+
     @Inject(method = "renderBackground(Lnet/minecraft/client/util/math/MatrixStack;I)V",
             at = @At("HEAD"), cancellable = true)
     private void fmBackground(MatrixStack matrices, int vOffset, CallbackInfo ci) {
-        if ((Object) this instanceof TitleScreen) return;
+        if (!fmShouldUseCustomBackground()) return;
         FMRenderer.rect(matrices, 0, 0, this.width, this.height, 0xFF030308);
         FMRenderer.drawNetwork(matrices, this.width, this.height);
         ci.cancel();
@@ -30,7 +37,7 @@ public class ScreenMixin {
     @Inject(method = "renderBackground(Lnet/minecraft/client/util/math/MatrixStack;)V",
             at = @At("HEAD"), cancellable = true)
     private void fmBackgroundNoOffset(MatrixStack matrices, CallbackInfo ci) {
-        if ((Object) this instanceof TitleScreen) return;
+        if (!fmShouldUseCustomBackground()) return;
         FMRenderer.rect(matrices, 0, 0, this.width, this.height, 0xFF030308);
         FMRenderer.drawNetwork(matrices, this.width, this.height);
         ci.cancel();
@@ -39,7 +46,7 @@ public class ScreenMixin {
     @Inject(method = "renderBackgroundTexture(I)V",
             at = @At("HEAD"), cancellable = true)
     private void fmBackgroundTexture(int vOffset, CallbackInfo ci) {
-        if ((Object) this instanceof TitleScreen) return;
+        if (!fmShouldUseCustomBackground()) return;
         ci.cancel();
     }
 }

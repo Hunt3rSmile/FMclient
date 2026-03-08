@@ -1125,9 +1125,8 @@ ipcMain.handle('auth-elyby', async (event, { username, password }) => {
 });
 
 // ── Download authlib-injector (needed for ely.by multiplayer) ─
-// ── Ensure FMclient Visuals mod is always present in mods/ ───────
-// The mod is bundled with the launcher in assets/mods/fmvisuals.jar
-// It is restored automatically if the user deletes it.
+// ── Ensure FMclient Visuals mod is present only on supported profiles ────
+// The bundled visuals mod currently targets Fabric 1.16.5 only.
 function sendDebug(msg) {
   try {
     if (mainWindow && !mainWindow.isDestroyed()) {
@@ -1136,27 +1135,41 @@ function sendDebug(msg) {
   } catch {}
 }
 
-function ensureFMVisuals(gameDir) {
+function supportsFMVisuals(version, type) {
+  return String(version || '') === '1.16.5' && String(type || '').toLowerCase() === 'fabric';
+}
+
+function syncFMVisuals(gameDir, version, type) {
   try {
     const modsDir = path.join(gameDir, 'mods');
     fs.mkdirSync(modsDir, { recursive: true });
     const dest = path.join(modsDir, 'fmvisuals.jar');
+
+    if (!supportsFMVisuals(version, type)) {
+      sendDebug(`syncFMVisuals: skipped for unsupported profile ${type || 'unknown'} ${version || 'unknown'}`);
+      if (fs.existsSync(dest)) {
+        fs.unlinkSync(dest);
+        sendDebug('syncFMVisuals: removed stale fmvisuals.jar from active mods');
+      }
+      return;
+    }
+
     const src  = app.isPackaged
       ? path.join(process.resourcesPath, 'assets', 'mods', 'fmvisuals.jar')
       : path.join(__dirname, 'assets', 'mods', 'fmvisuals.jar');
 
-    sendDebug(`ensureFMVisuals: gameDir=${gameDir}`);
-    sendDebug(`ensureFMVisuals: src=${src} exists=${fs.existsSync(src)}`);
-    sendDebug(`ensureFMVisuals: dest=${dest}`);
+    sendDebug(`syncFMVisuals: gameDir=${gameDir}`);
+    sendDebug(`syncFMVisuals: src=${src} exists=${fs.existsSync(src)}`);
+    sendDebug(`syncFMVisuals: dest=${dest}`);
 
     if (!fs.existsSync(src)) {
-      sendDebug(`ensureFMVisuals: ERROR — source JAR not found!`);
+      sendDebug('syncFMVisuals: ERROR — source JAR not found!');
       return;
     }
     fs.copyFileSync(src, dest);
-    sendDebug(`ensureFMVisuals: copied OK (${fs.statSync(dest).size} bytes)`);
+    sendDebug(`syncFMVisuals: copied OK (${fs.statSync(dest).size} bytes)`);
   } catch (e) {
-    sendDebug(`ensureFMVisuals: EXCEPTION — ${e.message}`);
+    sendDebug(`syncFMVisuals: EXCEPTION — ${e.message}`);
   }
 }
 
@@ -1410,8 +1423,8 @@ ipcMain.handle('launch-game', async (event, options) => {
     try { patchServersDat(gameDir); } catch {}
 
     activateProfileMods(gameDir, version, type);
-    // ── Ensure FMclient Visuals mod is present (restore if deleted) ──
-    ensureFMVisuals(gameDir);
+    // ── Restore bundled visuals only on supported Minecraft profiles ──
+    syncFMVisuals(gameDir, version, type);
     ensureRussianLanguage(gameDir);
 
     // ── 7. Build launch command ───────────────────────────────

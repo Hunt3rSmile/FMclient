@@ -8,6 +8,7 @@ import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.text.LiteralText;
 import net.minecraft.text.Text;
 import su.firemine.fmvisuals.config.VisualsConfig;
+import su.firemine.fmvisuals.util.FMRenderer;
 
 public class VisualsScreen extends Screen {
     private static final int W = 372;
@@ -115,7 +116,7 @@ public class VisualsScreen extends Screen {
         fill(matrices, x, y + H - 1, x + W, y + H, C_STROKE);
         fill(matrices, x, y, x + 1, y + H, C_STROKE);
         fill(matrices, x + W - 1, y, x + W, y + H, C_STROKE);
-        fill(matrices, x + PAD, y + 14, x + PAD + 62, y + 24, C_PILL);
+        FMRenderer.pill(matrices, x + PAD, y + 14, 62, 10, C_PILL);
         textRenderer.draw(matrices, "PROFILE", x + PAD + 9, y + 16, C_TEXT_MUTED);
         textRenderer.drawWithShadow(matrices, "Визуалы", x + PAD, y + 34, C_TEXT);
         String subtitle = "Чистый и спокойный интерфейс графики";
@@ -138,7 +139,7 @@ public class VisualsScreen extends Screen {
 
         String hint = "ESC - закрыть   RSHIFT - открыть в игре";
         textRenderer.draw(matrices, hint, x + PAD, y + H - 14, C_TEXT_FAINT);
-        textRenderer.draw(matrices, "v1.2.3", x + W - PAD - textRenderer.getWidth("v1.2.3"), y + H - 14, C_TEXT_MUTED);
+        textRenderer.draw(matrices, "v1.2.4", x + W - PAD - textRenderer.getWidth("v1.2.4"), y + H - 14, C_TEXT_MUTED);
 
         super.render(matrices, mouseX, mouseY, delta);
     }

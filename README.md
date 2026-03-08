@@ -4,7 +4,7 @@
 
 **Современный лаунчер Minecraft**
 
-![Version](https://img.shields.io/badge/version-1.2.3-a855f7?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-1.2.4-a855f7?style=for-the-badge)
 ![Electron](https://img.shields.io/badge/Electron-33-47848F?style=for-the-badge&logo=electron&logoColor=white)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-0d0d0d?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-MIT-22c55e?style=for-the-badge)
