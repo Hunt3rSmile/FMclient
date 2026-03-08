@@ -5,7 +5,12 @@
   "client": [
     "ScreenMixin",
     "TitleScreenMixin",
+    "SelectWorldScreenMixin",
+    "MultiplayerScreenMixin",
+    "ButtonWidgetMixin",
     "ClickableWidgetAccessor",
+    "EntryListWidgetAccessor",
+    "EntryListWidgetMixin",
     "MinecraftClientMixin"
   ],
   "injectors": {

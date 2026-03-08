@@ -27,8 +27,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   offDebugLog:       () => ipcRenderer.removeAllListeners('debug-log'),
   // Auto-update
   checkUpdate:       () => ipcRenderer.invoke('check-update'),
+  startUpdate:       () => ipcRenderer.invoke('start-update'),
   openRelease:       (url) => ipcRenderer.invoke('open-release', url),
   onUpdateAvailable: (cb) => ipcRenderer.on('update-available', (_, d) => cb(d)),
+  onUpdateStatus:    (cb) => ipcRenderer.on('update-status', (_, d) => cb(d)),
+  offUpdateStatus:   () => ipcRenderer.removeAllListeners('update-status'),
   // Mod loaders
   installLoader:     (opts) => ipcRenderer.invoke('install-loader', opts),
   checkLoaders:      (opts) => ipcRenderer.invoke('check-loaders', opts),

@@ -98,20 +98,90 @@ document.getElementById('btn-close').addEventListener('click', () =>
 
 
 // ── Auto-Update Banner ───────────────────────────────────────
-let updateReleaseUrl = null;
+let currentUpdate = null;
+const updateBanner       = document.getElementById('update-banner');
+const updateVersionEl    = document.getElementById('update-version');
+const updateMetaEl       = document.getElementById('update-meta');
+const updateStatusEl     = document.getElementById('update-status');
+const updateProgressEl   = document.getElementById('update-progress');
+const updateProgressFill = document.getElementById('update-progress-fill');
+const updateDownloadBtn  = document.getElementById('update-download-btn');
+const updateDismissBtn   = document.getElementById('update-dismiss-btn');
 
-window.electronAPI?.onUpdateAvailable(({ version, url }) => {
-  updateReleaseUrl = url;
-  document.getElementById('update-version').textContent = `v${version}`;
-  document.getElementById('update-banner').classList.add('visible');
+function setUpdateProgress(percent) {
+  if (!updateProgressEl || !updateProgressFill) return;
+  if (typeof percent === 'number' && Number.isFinite(percent)) {
+    const normalized = Math.max(0, Math.min(100, percent));
+    updateProgressEl.classList.add('visible');
+    updateProgressFill.style.width = `${normalized}%`;
+  } else {
+    updateProgressEl.classList.remove('visible');
+    updateProgressFill.style.width = '0%';
+  }
+}
+
+function setUpdateButton(label, disabled) {
+  if (!updateDownloadBtn) return;
+  updateDownloadBtn.textContent = label;
+  updateDownloadBtn.disabled = !!disabled;
+}
+
+function setUpdateStatusText(message, state = 'info') {
+  if (!updateStatusEl) return;
+  updateStatusEl.textContent = message || '';
+  updateStatusEl.dataset.state = state;
+}
+
+window.electronAPI?.onUpdateAvailable((update) => {
+  currentUpdate = update;
+  if (updateVersionEl) updateVersionEl.textContent = `v${update.version}`;
+  if (updateMetaEl) updateMetaEl.textContent = update.targetLabel ? `Подходит для ${update.targetLabel}` : '';
+  setUpdateStatusText(
+    `Нажми «Обновить», и FMclient сам скачает и установит ${update.fileLabel || 'обновление'}.`
+  );
+  setUpdateProgress(null);
+  setUpdateButton('Обновить', false);
+  updateBanner?.classList.add('visible');
 });
 
-document.getElementById('update-download-btn')?.addEventListener('click', () => {
-  if (updateReleaseUrl) window.electronAPI?.openRelease(updateReleaseUrl);
+window.electronAPI?.onUpdateStatus(({ state, message, progress }) => {
+  if (message) setUpdateStatusText(message, state === 'error' ? 'error' : 'info');
+
+  if (state === 'downloading') {
+    setUpdateButton(
+      progress !== null && progress !== undefined ? `Скачивание ${progress}%` : 'Скачивание...',
+      true
+    );
+    setUpdateProgress(progress);
+    return;
+  }
+
+  if (state === 'installing') {
+    setUpdateButton('Установка...', true);
+    setUpdateProgress(100);
+    return;
+  }
+
+  if (state === 'error') {
+    setUpdateButton('Повторить', false);
+    setUpdateProgress(null);
+    if (message) showToast(message);
+  }
 });
 
-document.getElementById('update-dismiss-btn')?.addEventListener('click', () => {
-  document.getElementById('update-banner').classList.remove('visible');
+updateDownloadBtn?.addEventListener('click', async () => {
+  if (!currentUpdate) return;
+  setUpdateButton('Подготовка...', true);
+  const result = await window.electronAPI?.startUpdate();
+  if (result?.success === false) {
+    setUpdateButton('Повторить', false);
+    setUpdateStatusText(result.message || 'Не удалось запустить обновление', 'error');
+    showToast(result.message || 'Не удалось запустить обновление');
+  }
+});
+
+updateDismissBtn?.addEventListener('click', () => {
+  updateBanner?.classList.remove('visible');
 });
 
 // ── Tab Navigation ───────────────────────────────────────────

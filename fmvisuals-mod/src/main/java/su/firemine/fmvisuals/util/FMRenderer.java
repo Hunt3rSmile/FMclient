@@ -1,6 +1,7 @@
 package su.firemine.fmvisuals.util;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawableHelper;
 import net.minecraft.client.gui.widget.ClickableWidget;
@@ -17,6 +18,19 @@ import java.util.List;
 import java.util.Random;
 
 public final class FMRenderer extends DrawableHelper {
+    private static final int NETWORK_R = 96;
+    private static final int NETWORK_G = 170;
+    private static final int NETWORK_B = 214;
+    private static final String SETTINGS_ICON_ID = "__fm_settings_icon__";
+    private static final String QUIT_ICON_ID = "__fm_quit_icon__";
+    private static final int BUTTON_FILL = 0xA21D2127;
+    private static final int BUTTON_FILL_HOVER = 0xB8272C33;
+    private static final int BUTTON_EDGE = 0x5E737E8A;
+    private static final int BUTTON_EDGE_HOVER = 0x9CDDE5EC;
+    private static final int BUTTON_GLOW = 0x102A3138;
+    private static final int COMPACT_FILL = 0xAE1A1E23;
+    private static final int COMPACT_FILL_HOVER = 0xBC22272D;
+    private static final int COMPACT_EDGE = 0x6A7A8691;
 
     private FMRenderer() {}
 
@@ -80,11 +94,11 @@ public final class FMRenderer extends DrawableHelper {
                 float dy   = (PY[i] - PY[j]) * H;
                 float dist = (float) Math.sqrt(dx * dx + dy * dy);
                 if (dist < maxDist) {
-                    int alpha = (int)((1f - dist / maxDist) * 70);
+                    int alpha = (int)((1f - dist / maxDist) * 42);
                     float x1 = PX[i] * W, y1 = PY[i] * H;
                     float x2 = PX[j] * W, y2 = PY[j] * H;
-                    buf.vertex(matrix, x1, y1, 0f).color(168, 85, 247, alpha).next();
-                    buf.vertex(matrix, x2, y2, 0f).color(168, 85, 247, alpha).next();
+                    buf.vertex(matrix, x1, y1, 0f).color(NETWORK_R, NETWORK_G, NETWORK_B, alpha).next();
+                    buf.vertex(matrix, x2, y2, 0f).color(NETWORK_R, NETWORK_G, NETWORK_B, alpha).next();
                 }
             }
         }
@@ -96,7 +110,8 @@ public final class FMRenderer extends DrawableHelper {
         for (int i = 0; i < N; i++) {
             int x = (int)(PX[i] * W);
             int y = (int)(PY[i] * H);
-            fill(matrices, x - 1, y - 1, x + 2, y + 2, 0x88a855f7);
+            fill(matrices, x - 2, y - 2, x + 3, y + 3, 0x10273A48);
+            fill(matrices, x - 1, y - 1, x + 2, y + 2, 0xA060AAD6);
         }
     }
 
@@ -121,30 +136,84 @@ public final class FMRenderer extends DrawableHelper {
 
     // ── Restyle buttons ────────────────────────────────────────────────────
     public static void drawButtons(MatrixStack matrices, List<ClickableWidget> buttons,
-                                    TextRenderer tr, int mouseX, int mouseY) {
+                                   TextRenderer tr, int mouseX, int mouseY) {
         for (ClickableWidget btn : buttons) {
             if (!btn.visible) continue;
-            ClickableWidgetAccessor acc = (ClickableWidgetAccessor) btn;
-            int bw = acc.getWidthPx(), bh = acc.getHeightPx();
-            if (bw < 40) continue;
-
-            boolean hov = mouseX >= btn.x && mouseX < btn.x + bw
-                       && mouseY >= btn.y && mouseY < btn.y + bh;
-
-            fmFill(matrices, btn.x, btn.y, bw, bh, hov ? 0xBB180638 : 0xAA0b0222);
-            fmBorder(matrices, btn.x, btn.y, bw, bh, hov ? 0xFFa855f7 : 0xFF3d1468);
-            if (hov)
-                fill(matrices, btn.x + 2, btn.y + 1,
-                     btn.x + bw - 2, btn.y + 2, 0x18ffffff);
-
-            Text msg = btn.getMessage();
-            if (msg != null) {
-                int tw = tr.getWidth(msg);
-                tr.drawWithShadow(matrices, msg,
-                    btn.x + (bw - tw) / 2.0f,
-                    btn.y + (bh - 8) / 2.0f,
-                    hov ? 0xFFFFFFFF : 0xFFCCAAFF);
-            }
+            drawWidgetButton(matrices, btn, tr, mouseX, mouseY);
         }
+    }
+
+    public static void drawWidgetButton(MatrixStack matrices, ClickableWidget btn,
+                                        TextRenderer tr, int mouseX, int mouseY) {
+        ClickableWidgetAccessor acc = (ClickableWidgetAccessor) btn;
+        int bw = acc.getWidthPx();
+        int bh = acc.getHeightPx();
+        boolean hov = mouseX >= btn.x && mouseX < btn.x + bw
+            && mouseY >= btn.y && mouseY < btn.y + bh;
+
+        if (bw < 40) {
+            fmFill(matrices, btn.x, btn.y, bw, bh, hov ? COMPACT_FILL_HOVER : COMPACT_FILL);
+            fmBorder(matrices, btn.x, btn.y, bw, bh, hov ? BUTTON_EDGE_HOVER : COMPACT_EDGE);
+        } else {
+            fill(matrices, btn.x - 2, btn.y - 2, btn.x + bw + 2, btn.y + bh + 2, 0x0C000000);
+            fmFill(matrices, btn.x, btn.y, bw, bh, hov ? BUTTON_FILL_HOVER : BUTTON_FILL);
+            fmBorder(matrices, btn.x, btn.y, bw, bh, hov ? BUTTON_EDGE_HOVER : BUTTON_EDGE);
+            fill(matrices, btn.x + 2, btn.y + 1, btn.x + bw - 2, btn.y + 3,
+                hov ? 0x1BFFFFFF : 0x12FFFFFF);
+            fill(matrices, btn.x + 2, btn.y + bh - 3, btn.x + bw - 2, btn.y + bh - 1,
+                hov ? BUTTON_GLOW : 0x12000000);
+        }
+
+        Text msg = btn.getMessage();
+        if (msg == null) return;
+
+        String label = msg.getString();
+        if (SETTINGS_ICON_ID.equals(label)) {
+            drawSettingsIcon(matrices, btn.x, btn.y, bw, bh, hov ? 0xFFF1F4F7 : 0xFFD2D7DD);
+            return;
+        }
+        if (QUIT_ICON_ID.equals(label)) {
+            drawQuitIcon(matrices, btn.x, btn.y, bw, bh, hov ? 0xFFF1F4F7 : 0xFFD2D7DD);
+            return;
+        }
+
+        int tw = tr.getWidth(msg);
+        if (bw < 40 && tw > bw - 8) {
+            return;
+        }
+        float textX = btn.x + (bw - tw) / 2.0f;
+        int color = hov ? 0xFFF0F3F6 : 0xFFD2D8DE;
+        tr.drawWithShadow(matrices, msg, textX, btn.y + (bh - 8) / 2.0f, color);
+    }
+
+    private static void drawSettingsIcon(MatrixStack matrices, int x, int y, int w, int h, int color) {
+        int cx = x + w / 2;
+        int cy = y + h / 2;
+        int ring = color & 0xDFFFFFFF;
+
+        fill(matrices, cx - 1, cy - 7, cx + 1, cy - 4, color);
+        fill(matrices, cx - 1, cy + 4, cx + 1, cy + 7, color);
+        fill(matrices, cx - 7, cy - 1, cx - 4, cy + 1, color);
+        fill(matrices, cx + 4, cy - 1, cx + 7, cy + 1, color);
+        fill(matrices, cx - 5, cy - 5, cx - 3, cy - 3, color);
+        fill(matrices, cx + 3, cy - 5, cx + 5, cy - 3, color);
+        fill(matrices, cx - 5, cy + 3, cx - 3, cy + 5, color);
+        fill(matrices, cx + 3, cy + 3, cx + 5, cy + 5, color);
+        fill(matrices, cx - 4, cy - 4, cx + 4, cy + 4, ring);
+        fill(matrices, cx - 2, cy - 2, cx + 2, cy + 2, 0xFF1C2127);
+    }
+
+    private static void drawQuitIcon(MatrixStack matrices, int x, int y, int w, int h, int color) {
+        int cx = x + w / 2;
+        int cy = y + h / 2;
+        fill(matrices, cx - 5, cy - 6, cx - 2, cy - 3, color);
+        fill(matrices, cx - 2, cy - 3, cx + 1, cy, color);
+        fill(matrices, cx + 1, cy, cx + 4, cy + 3, color);
+        fill(matrices, cx + 4, cy + 3, cx + 7, cy + 6, color);
+
+        fill(matrices, cx + 4, cy - 6, cx + 7, cy - 3, color);
+        fill(matrices, cx + 1, cy - 3, cx + 4, cy, color);
+        fill(matrices, cx - 2, cy, cx + 1, cy + 3, color);
+        fill(matrices, cx - 5, cy + 3, cx - 2, cy + 6, color);
     }
 }

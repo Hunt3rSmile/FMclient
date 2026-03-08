@@ -48,8 +48,15 @@
         <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
         <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
       </svg>
-      <span class="update-text">Доступно обновление <strong id="update-version"></strong></span>
-      <button class="update-download-btn" id="update-download-btn">Скачать</button>
+      <span class="update-text">
+        <span class="update-title">Доступно обновление <strong id="update-version"></strong></span>
+        <span class="update-meta" id="update-meta"></span>
+        <span class="update-status" id="update-status">Нажми «Обновить», чтобы FMclient сам скачал новую версию.</span>
+      </span>
+      <div class="update-progress" id="update-progress" aria-hidden="true">
+        <div class="update-progress-fill" id="update-progress-fill"></div>
+      </div>
+      <button class="update-download-btn" id="update-download-btn">Обновить</button>
       <button class="update-dismiss-btn" id="update-dismiss-btn" title="Позже">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
           <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -568,7 +575,7 @@
               <div class="about-logo">
                 <span class="logo-fm">FM</span><span class="logo-client">client</span>
               </div>
-              <div class="about-version">Версия 1.1.5</div>
+              <div class="about-version">Версия 1.2.2</div>
               <div class="about-desc">Современный, красивый лаунчер для Minecraft</div>
               <div class="about-tags">
                 <span class="about-tag">Electron</span>

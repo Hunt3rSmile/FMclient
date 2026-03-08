@@ -8,4 +8,6 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 public interface ClickableWidgetAccessor {
     @Accessor("width")  int getWidthPx();
     @Accessor("height") int getHeightPx();
+    @Accessor("width") void setWidthPx(int width);
+    @Accessor("height") void setHeightPx(int height);
 }

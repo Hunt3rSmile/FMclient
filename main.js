@@ -1,7 +1,7 @@
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path    = require('path');
 const os      = require('os');
-const { execFile, exec } = require('child_process');
+const { execFile, exec, spawn, spawnSync } = require('child_process');
 const fs      = require('fs');
 const https   = require('https');
 const http    = require('http');
@@ -9,11 +9,18 @@ const zlib    = require('zlib');
 const crypto  = require('crypto');
 
 const GITHUB_REPO    = 'Hunt3rSmile/FMclient';
-const CURRENT_VER    = '1.2.0';
+const CURRENT_VER    = app.getVersion();
+const FMCLIENT_UA    = `FMclient/${CURRENT_VER} (${process.platform}; ${os.arch()})`;
 
 let mainWindow;
 let detectedJavaPath = null;
 let gameProcess      = null;
+const updateState    = {
+  info: null,
+  downloading: false,
+  installing: false,
+  downloadedPath: null,
+};
 
 // ── Auth storage ──────────────────────────────────────────────
 const authFile = path.join(app.getPath('userData'), 'fmclient_auth.json');
@@ -37,24 +44,324 @@ function semverGt(a, b) {
   return false;
 }
 
-async function checkForUpdates() {
+function sendUpdateStatus(payload) {
   try {
-    const data = await httpRequest('GET',
-      `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`,
-      { 'User-Agent': 'FMclient-Launcher' }, null);
-    if (!data?.tag_name) return null;
-    const latest = data.tag_name.replace(/^v/, '');
-    if (!semverGt(latest, CURRENT_VER)) return null;
-    return {
-      version:  latest,
-      url:      data.html_url,
-      notes:    data.body ? data.body.slice(0, 300) : '',
-    };
-  } catch { return null; }
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-status', payload);
+    }
+  } catch {}
 }
 
-ipcMain.handle('check-update',  async () => checkForUpdates());
-ipcMain.handle('open-release',  async (_, url) => { shell.openExternal(url); });
+function commandSucceeds(command, args) {
+  try {
+    const res = spawnSync(command, args, { stdio: 'ignore' });
+    return res.status === 0;
+  } catch {
+    return false;
+  }
+}
+
+function detectLinuxPackageType() {
+  const execPathLower = process.execPath.toLowerCase();
+  if (process.env.APPIMAGE || execPathLower.endsWith('.appimage')) return 'appimage';
+  if (commandSucceeds('pacman', ['-Qo', process.execPath])) return 'pacman';
+  if (commandSucceeds('dpkg-query', ['-S', process.execPath])) return 'deb';
+  if (commandSucceeds('dpkg', ['-S', process.execPath])) return 'deb';
+  if (!app.isPackaged) return 'appimage';
+  if (fs.existsSync('/etc/arch-release')) return 'pacman';
+  if (fs.existsSync('/etc/debian_version') || fs.existsSync('/etc/lsb-release')) return 'deb';
+  return 'appimage';
+}
+
+function getUpdateTarget() {
+  if (process.platform === 'win32') {
+    return {
+      platform: 'win32',
+      packageType: 'nsis',
+      label: 'Windows',
+      fileLabel: 'установщик Windows',
+      matchers: [name => /\.exe$/i.test(name) && !/\.blockmap$/i.test(name)],
+    };
+  }
+
+  if (process.platform === 'linux') {
+    const packageType = detectLinuxPackageType();
+    if (packageType === 'appimage') {
+      return {
+        platform: 'linux',
+        packageType,
+        label: 'Linux AppImage',
+        fileLabel: 'AppImage',
+        matchers: [/\.AppImage$/i],
+      };
+    }
+    if (packageType === 'pacman') {
+      return {
+        platform: 'linux',
+        packageType,
+        label: 'Linux pacman',
+        fileLabel: 'пакет pacman',
+        matchers: [/\.(pacman|pkg\.tar\.xz|pkg\.tar\.zst)$/i],
+      };
+    }
+    return {
+      platform: 'linux',
+      packageType: 'deb',
+      label: 'Linux .deb',
+      fileLabel: 'пакет .deb',
+      matchers: [/\.deb$/i],
+    };
+  }
+
+  return null;
+}
+
+function assetMatches(assetName, matchers) {
+  return matchers.some((matcher) => {
+    if (typeof matcher === 'function') return matcher(assetName);
+    return matcher.test(assetName);
+  });
+}
+
+function selectReleaseAsset(assets, target) {
+  if (!Array.isArray(assets) || !target) return null;
+  return assets.find(asset => asset?.name && assetMatches(asset.name, target.matchers)) || null;
+}
+
+function sanitizeFileName(name) {
+  return String(name).replace(/[<>:"/\\|?*\x00-\x1f]/g, '-');
+}
+
+function shellQuote(value) {
+  return `'${String(value).replace(/'/g, `'\"'\"'`)}'`;
+}
+
+function writeHelperScript(name, contents) {
+  const dir = path.join(app.getPath('userData'), 'updates', 'scripts');
+  fs.mkdirSync(dir, { recursive: true });
+  const scriptPath = path.join(dir, name);
+  fs.writeFileSync(scriptPath, contents, 'utf8');
+  try { fs.chmodSync(scriptPath, 0o700); } catch {}
+  return scriptPath;
+}
+
+function launchDetached(command, args, options = {}) {
+  const child = spawn(command, args, {
+    detached: true,
+    stdio: 'ignore',
+    ...options,
+  });
+  child.unref();
+}
+
+function getUpdateDownloadPath(info) {
+  const dir = path.join(app.getPath('downloads'), 'FMclient Updates', info.version);
+  fs.mkdirSync(dir, { recursive: true });
+  return path.join(dir, sanitizeFileName(info.assetName));
+}
+
+function buildUpdateInfo(release, target, asset) {
+  return {
+    version: release.tag_name.replace(/^v/, ''),
+    notes: release.body ? release.body.slice(0, 400) : '',
+    releaseUrl: release.html_url,
+    assetName: asset.name,
+    assetUrl: asset.browser_download_url,
+    assetSize: asset.size || 0,
+    platform: target.platform,
+    packageType: target.packageType,
+    targetLabel: target.label,
+    fileLabel: target.fileLabel,
+  };
+}
+
+async function checkForUpdates() {
+  if (!app.isPackaged) return null;
+  if (!['win32', 'linux'].includes(process.platform)) return null;
+  try {
+    const release = await httpRequest(
+      'GET',
+      `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`,
+      { 'User-Agent': FMCLIENT_UA, 'Accept': 'application/vnd.github+json' },
+      null
+    );
+
+    if (!release?.tag_name) {
+      updateState.info = null;
+      updateState.downloadedPath = null;
+      return null;
+    }
+
+    const latest = release.tag_name.replace(/^v/, '');
+    if (!semverGt(latest, CURRENT_VER)) {
+      updateState.info = null;
+      updateState.downloadedPath = null;
+      return null;
+    }
+
+    const target = getUpdateTarget();
+    const asset = selectReleaseAsset(release.assets, target);
+    if (!asset) {
+      updateState.info = null;
+      updateState.downloadedPath = null;
+      return null;
+    }
+
+    const info = buildUpdateInfo(release, target, asset);
+    updateState.info = info;
+    updateState.downloadedPath = null;
+    return info;
+  } catch {
+    updateState.info = null;
+    updateState.downloadedPath = null;
+    return null;
+  }
+}
+
+async function downloadUpdatePackage(info) {
+  const downloadPath = getUpdateDownloadPath(info);
+
+  if (info.assetSize > 0 && fileOk(downloadPath, info.assetSize)) {
+    return downloadPath;
+  }
+
+  await downloadFile(info.assetUrl, downloadPath, (done, total) => {
+    const knownTotal = total || info.assetSize || 0;
+    const progress = knownTotal > 0 ? Math.min(99, Math.max(1, Math.round(done / knownTotal * 100))) : null;
+    sendUpdateStatus({
+      state: 'downloading',
+      message: progress !== null ? `Скачивание обновления: ${progress}%` : 'Скачивание обновления...',
+      progress,
+    });
+  });
+
+  if (info.assetSize > 0 && !fileOk(downloadPath, info.assetSize)) {
+    throw new Error('Файл обновления скачался не полностью');
+  }
+
+  return downloadPath;
+}
+
+function installWindowsUpdate(installerPath) {
+  const escapedPath = installerPath.replace(/"/g, '""');
+  const scriptPath = writeHelperScript(
+    `install-update-${Date.now()}.cmd`,
+    [
+      '@echo off',
+      'timeout /t 2 /nobreak >nul',
+      `start "" "${escapedPath}"`,
+      'del "%~f0"',
+    ].join('\r\n')
+  );
+  launchDetached('cmd.exe', ['/c', scriptPath], { windowsHide: true });
+}
+
+function installAppImageUpdate(downloadPath) {
+  const appImagePath = process.env.APPIMAGE || (process.execPath.toLowerCase().endsWith('.appimage') ? process.execPath : null);
+  if (!appImagePath) throw new Error('Текущий запуск не является AppImage');
+
+  fs.accessSync(path.dirname(appImagePath), fs.constants.W_OK);
+
+  const scriptPath = writeHelperScript(
+    `install-update-${Date.now()}.sh`,
+    `#!/bin/sh
+set -e
+sleep 1
+SRC=${shellQuote(downloadPath)}
+DST=${shellQuote(appImagePath)}
+TMP="$DST.tmp"
+chmod +x "$SRC"
+cp "$SRC" "$TMP"
+chmod +x "$TMP"
+mv -f "$TMP" "$DST"
+"$DST" >/dev/null 2>&1 &
+rm -f "$SRC"
+rm -f "$0"
+`
+  );
+
+  launchDetached('sh', [scriptPath]);
+}
+
+function installLinuxPackageUpdate(downloadPath, packageType) {
+  const installCommand = packageType === 'pacman'
+    ? `pacman -U --noconfirm ${shellQuote(downloadPath)}`
+    : `apt install -y ${shellQuote(downloadPath)}`;
+
+  const relaunchPath = process.execPath;
+  const scriptPath = writeHelperScript(
+    `install-update-${Date.now()}.sh`,
+    `#!/bin/sh
+sleep 1
+if command -v pkexec >/dev/null 2>&1; then
+  pkexec sh -c ${shellQuote(installCommand)}
+  status=$?
+  if [ "$status" -eq 0 ]; then
+    ${shellQuote(relaunchPath)} >/dev/null 2>&1 &
+  fi
+else
+  if command -v xdg-open >/dev/null 2>&1; then
+    xdg-open ${shellQuote(downloadPath)} >/dev/null 2>&1 &
+  fi
+fi
+rm -f "$0"
+`
+  );
+
+  launchDetached('sh', [scriptPath]);
+}
+
+function installUpdatePackage(downloadPath, info) {
+  if (process.platform === 'win32') {
+    installWindowsUpdate(downloadPath);
+    return;
+  }
+
+  if (info.packageType === 'appimage') {
+    installAppImageUpdate(downloadPath);
+    return;
+  }
+
+  installLinuxPackageUpdate(downloadPath, info.packageType);
+}
+
+async function startUpdate() {
+  const info = updateState.info || await checkForUpdates();
+  if (!info) return { success: false, message: 'Для текущей установки обновление не найдено' };
+  if (updateState.downloading || updateState.installing) {
+    return { success: false, message: 'Обновление уже выполняется' };
+  }
+
+  try {
+    updateState.downloading = true;
+    sendUpdateStatus({ state: 'downloading', message: 'Подготовка обновления...', progress: 0 });
+    const downloadPath = await downloadUpdatePackage(info);
+
+    updateState.downloading = false;
+    updateState.installing = true;
+    updateState.downloadedPath = downloadPath;
+
+    const installMessage = info.packageType === 'nsis'
+      ? 'Запускаю установщик обновления...'
+      : info.packageType === 'appimage'
+        ? 'Подготавливаю замену AppImage...'
+        : 'Запускаю установку обновления...';
+
+    sendUpdateStatus({ state: 'installing', message: installMessage, progress: 100 });
+    installUpdatePackage(downloadPath, info);
+    setTimeout(() => app.quit(), 350);
+    return { success: true };
+  } catch (e) {
+    updateState.downloading = false;
+    updateState.installing = false;
+    sendUpdateStatus({ state: 'error', message: e.message });
+    return { success: false, message: e.message };
+  }
+}
+
+ipcMain.handle('check-update', async () => checkForUpdates());
+ipcMain.handle('start-update', async () => startUpdate());
+ipcMain.handle('open-release', async (_, url) => { shell.openExternal(url); });
 
 // ── HTTP helper (JSON only) ───────────────────────────────────
 function httpRequest(method, url, headers, body) {
@@ -853,6 +1160,29 @@ function ensureFMVisuals(gameDir) {
   }
 }
 
+function ensureRussianLanguage(gameDir) {
+  try {
+    const optionsPath = path.join(gameDir, 'options.txt');
+    fs.mkdirSync(gameDir, { recursive: true });
+
+    if (!fs.existsSync(optionsPath)) {
+      fs.writeFileSync(optionsPath, 'lang:ru_ru\n', 'utf8');
+      return;
+    }
+
+    const raw = fs.readFileSync(optionsPath, 'utf8');
+    if (/^lang:/m.test(raw)) {
+      const next = raw.replace(/^lang:.*/m, 'lang:ru_ru');
+      if (next !== raw) fs.writeFileSync(optionsPath, next, 'utf8');
+    } else {
+      const suffix = raw.endsWith('\n') || raw.length === 0 ? '' : '\n';
+      fs.writeFileSync(optionsPath, raw + suffix + 'lang:ru_ru\n', 'utf8');
+    }
+  } catch (e) {
+    sendDebug(`ensureRussianLanguage: EXCEPTION - ${e.message}`);
+  }
+}
+
 async function ensureAuthlibInjector(gameDir) {
   const jar = path.join(gameDir, 'authlib-injector.jar');
   if (fs.existsSync(jar) && fs.statSync(jar).size > 100_000) return jar;
@@ -1109,6 +1439,7 @@ ipcMain.handle('launch-game', async (event, options) => {
 
     // ── Ensure FMclient Visuals mod is present (restore if deleted) ──
     ensureFMVisuals(gameDir);
+    ensureRussianLanguage(gameDir);
 
     // ── 7. Build launch command ───────────────────────────────
     send('launch', 0, 1, 'Запуск Minecraft...');
@@ -1131,7 +1462,7 @@ ipcMain.handle('launch-game', async (event, options) => {
       resolution_height:   '720',
       natives_directory:   nativesDir,
       launcher_name:       'FMclient',
-      launcher_version:    '1.1.5',
+      launcher_version:    CURRENT_VER,
       classpath:           classPath.join(cpSep),
     };
 
@@ -1396,7 +1727,7 @@ ipcMain.handle('search-mods', async (event, { query, mcVersion, loader, offset =
     if (loader && loader !== 'all') facets.push([`categories:${loader}`]);
 
     const url = `https://api.modrinth.com/v2/search?query=${encodeURIComponent(query || '')}&facets=${encodeURIComponent(JSON.stringify(facets))}&limit=20&offset=${offset}&index=relevance`;
-    const data = await httpRequest('GET', url, { 'User-Agent': 'FMclient/1.0.0 (hunt3rsmile@firemine.su)' }, null);
+    const data = await httpRequest('GET', url, { 'User-Agent': FMCLIENT_UA }, null);
     return { success: true, hits: data.hits || [], total: data.total_hits || 0 };
   } catch (e) {
     return { success: false, error: e.message };
@@ -1416,7 +1747,7 @@ ipcMain.handle('install-mod', async (event, { projectId, mcVersion, loader, game
     if (loader && loader !== 'all') p.set('loaders', JSON.stringify([loader]));
     if (p.toString()) url += '?' + p.toString();
 
-    const versions = await httpRequest('GET', url, { 'User-Agent': 'FMclient/1.0.0' }, null);
+    const versions = await httpRequest('GET', url, { 'User-Agent': FMCLIENT_UA }, null);
     if (!Array.isArray(versions) || !versions.length)
       throw new Error('Совместимая версия мода не найдена для выбранной MC версии и загрузчика');
 

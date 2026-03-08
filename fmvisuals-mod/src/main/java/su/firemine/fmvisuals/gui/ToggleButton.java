@@ -9,17 +9,19 @@ import net.minecraft.text.Text;
 import java.util.function.Consumer;
 
 public class ToggleButton extends ButtonWidget {
+    private static final int BG_ON = 0xFFCDD4DB;
+    private static final int BG_ON_HOVER = 0xFFD8DEE4;
+    private static final int BG_OFF = 0xFF1B2026;
+    private static final int BG_OFF_HOVER = 0xFF232931;
+    private static final int EDGE_ON = 0xFFF2F4F7;
+    private static final int EDGE_OFF = 0xFF39414A;
+    private static final int KNOB_ON = 0xFF161A20;
+    private static final int KNOB_OFF = 0xFFEAEFF4;
+    private static final int TEXT_ON = 0xFF161A20;
+    private static final int TEXT_OFF = 0xFF9DA7B1;
 
     private boolean state;
     private final Consumer<Boolean> onChange;
-
-    // Purple palette
-    private static final int CLR_ON       = 0xFF6B21A8;
-    private static final int CLR_ON_HOV   = 0xFF7c3aed;
-    private static final int CLR_OFF      = 0xFF16162a;
-    private static final int CLR_OFF_HOV  = 0xFF22223a;
-    private static final int BORDER_ON    = 0xFFa855f7;
-    private static final int BORDER_OFF   = 0xFF383858;
 
     public ToggleButton(int x, int y, int w, int h, boolean initial, Consumer<Boolean> onChange) {
         super(x, y, w, h, label(initial), btn -> {});
@@ -28,7 +30,7 @@ public class ToggleButton extends ButtonWidget {
     }
 
     private static Text label(boolean on) {
-        return new LiteralText(on ? "ВКЛ" : "ВЫКЛ");
+        return new LiteralText(on ? "ON" : "OFF");
     }
 
     @Override
@@ -41,31 +43,28 @@ public class ToggleButton extends ButtonWidget {
     @Override
     public void renderButton(MatrixStack matrices, int mouseX, int mouseY, float delta) {
         boolean hov = isHovered();
-        int bg     = state ? (hov ? CLR_ON_HOV  : CLR_ON)  : (hov ? CLR_OFF_HOV : CLR_OFF);
-        int border = state ? BORDER_ON : BORDER_OFF;
-        int textClr = state ? 0xFFFFFFFF : 0xFF777799;
+        int bg = state ? (hov ? BG_ON_HOVER : BG_ON) : (hov ? BG_OFF_HOVER : BG_OFF);
+        int edge = state ? EDGE_ON : EDGE_OFF;
+        int knob = state ? KNOB_ON : KNOB_OFF;
+        int textClr = state ? TEXT_ON : TEXT_OFF;
+        int knobW = 16;
+        int knobX = state ? this.x + this.width - knobW - 3 : this.x + 3;
 
-        // Background
         fill(matrices, this.x, this.y, this.x + this.width, this.y + this.height, bg);
-        // Border
-        fill(matrices, this.x, this.y,                    this.x + this.width, this.y + 1,              border);
-        fill(matrices, this.x, this.y + this.height - 1,  this.x + this.width, this.y + this.height,    border);
-        fill(matrices, this.x, this.y,                    this.x + 1,          this.y + this.height,    border);
-        fill(matrices, this.x + this.width - 1, this.y,   this.x + this.width, this.y + this.height,    border);
+        fill(matrices, this.x, this.y, this.x + this.width, this.y + 1, edge);
+        fill(matrices, this.x, this.y + this.height - 1, this.x + this.width, this.y + this.height, edge);
+        fill(matrices, this.x, this.y, this.x + 1, this.y + this.height, edge);
+        fill(matrices, this.x + this.width - 1, this.y, this.x + this.width, this.y + this.height, edge);
+        fill(matrices, this.x + 1, this.y + 1, this.x + this.width - 1, this.y + 2, state ? 0x28FFFFFF : 0x10FFFFFF);
 
-        // Indicator dot when ON
-        if (state) {
-            fill(matrices, this.x + 5, this.y + this.height / 2 - 2,
-                           this.x + 9, this.y + this.height / 2 + 2, 0xFFFFFFFF);
-        }
+        fill(matrices, knobX, this.y + 3, knobX + knobW, this.y + this.height - 3, knob);
+        fill(matrices, knobX, this.y + 3, knobX + knobW, this.y + 4, state ? 0x18000000 : 0x2CFFFFFF);
+        fill(matrices, knobX, this.y + this.height - 4, knobX + knobW, this.y + this.height - 3, state ? 0x30000000 : 0x18000000);
 
-        // Centered label
         net.minecraft.client.font.TextRenderer tr = MinecraftClient.getInstance().textRenderer;
         Text msg = getMessage();
         int tw = tr.getWidth(msg);
-        tr.draw(matrices, msg,
-            this.x + (this.width - tw) / 2.0f + (state ? 2 : 0),
-            this.y + (this.height - 8) / 2.0f,
-            textClr);
+        float labelX = state ? this.x + 10.0f : this.x + this.width - tw - 10.0f;
+        tr.drawWithShadow(matrices, msg, labelX, this.y + (this.height - 8) / 2.0f, textClr);
     }
 }
