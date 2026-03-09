@@ -1,8 +1,10 @@
 package su.firemine.fmvisuals.mixin;
 
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.screen.TitleScreen;
 import net.minecraft.client.gui.widget.ClickableWidget;
+import net.minecraft.client.resource.language.LanguageDefinition;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.text.LiteralText;
 import net.minecraft.text.Text;
@@ -12,6 +14,7 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import su.firemine.fmvisuals.util.FMRenderer;
 
 import java.util.concurrent.ThreadLocalRandom;
@@ -22,13 +25,23 @@ public abstract class TitleScreenMixin extends Screen {
     @Unique private static final String FM_QUIT_ICON = "__fm_quit_icon__";
 
     @Unique
-    private static final String[] FMCLIENT_TAGLINES = {
-            "Чистая сборка для спокойного запуска.",
-            "Аккуратный старт без визуального шума.",
-            "Минималистичный клиент для чистой игры.",
-            "Собран для тихого и стабильного входа.",
-            "Лишнее убрано. Фокус оставлен.",
-            "FMclient. Строго, чисто, быстро."
+    private static final String[] FMCLIENT_TAGLINES_RU = {
+            "\u0427\u0438\u0441\u0442\u0430\u044F \u0441\u0431\u043E\u0440\u043A\u0430 \u0434\u043B\u044F \u0441\u043F\u043E\u043A\u043E\u0439\u043D\u043E\u0433\u043E \u0437\u0430\u043F\u0443\u0441\u043A\u0430.",
+            "\u0410\u043A\u043A\u0443\u0440\u0430\u0442\u043D\u044B\u0439 \u0441\u0442\u0430\u0440\u0442 \u0431\u0435\u0437 \u0432\u0438\u0437\u0443\u0430\u043B\u044C\u043D\u043E\u0433\u043E \u0448\u0443\u043C\u0430.",
+            "\u041C\u0438\u043D\u0438\u043C\u0430\u043B\u0438\u0441\u0442\u0438\u0447\u043D\u044B\u0439 \u043A\u043B\u0438\u0435\u043D\u0442 \u0434\u043B\u044F \u0447\u0438\u0441\u0442\u043E\u0439 \u0438\u0433\u0440\u044B.",
+            "\u0421\u043E\u0431\u0440\u0430\u043D \u0434\u043B\u044F \u0442\u0438\u0445\u043E\u0433\u043E \u0438 \u0441\u0442\u0430\u0431\u0438\u043B\u044C\u043D\u043E\u0433\u043E \u0432\u0445\u043E\u0434\u0430.",
+            "\u041B\u0438\u0448\u043D\u0435\u0435 \u0443\u0431\u0440\u0430\u043D\u043E. \u0424\u043E\u043A\u0443\u0441 \u043E\u0441\u0442\u0430\u0432\u043B\u0435\u043D.",
+            "FMclient. \u0421\u0442\u0440\u043E\u0433\u043E, \u0447\u0438\u0441\u0442\u043E, \u0431\u044B\u0441\u0442\u0440\u043E."
+    };
+
+    @Unique
+    private static final String[] FMCLIENT_TAGLINES_EN = {
+            "Clean build for a calm launch.",
+            "A neat start without visual noise.",
+            "Minimalist client for a clean game.",
+            "Built for a quiet and stable entry.",
+            "Clutter removed. Focus preserved.",
+            "FMclient. Strict, clean, fast."
     };
 
     @Unique private static final long TYPE_INTERVAL_MS = 65L;
@@ -43,10 +56,22 @@ public abstract class TitleScreenMixin extends Screen {
 
     @Shadow private String splashText;
 
+    @Unique
+    private static String[] fmTaglines() {
+        boolean ru = MinecraftClient.getInstance().options.language.startsWith("ru");
+        return ru ? FMCLIENT_TAGLINES_RU : FMCLIENT_TAGLINES_EN;
+    }
+
     @Unique private int fmTypewriterState = STATE_TYPING;
     @Unique private int fmTaglineIndex = 0;
     @Unique private int fmVisibleChars = 0;
     @Unique private long fmLastAnimationStepAt = 0L;
+
+    // ── Language selector state ──
+    @Unique private boolean fmLangOpen = false;
+    @Unique private float fmLangAnim = 0.0f;
+    @Unique private static final int LANG_BX = 6, LANG_BY = 6, LANG_BW = 26, LANG_BH = 14;
+    @Unique private static final int LANG_DROP_W = 62, LANG_ITEM_H = 16;
 
     protected TitleScreenMixin() {
         super(new LiteralText("FMclient"));
@@ -57,9 +82,11 @@ public abstract class TitleScreenMixin extends Screen {
     private void fmInit(CallbackInfo ci) {
         this.splashText = null;
         this.fmTypewriterState = STATE_TYPING;
-        this.fmTaglineIndex = ThreadLocalRandom.current().nextInt(FMCLIENT_TAGLINES.length);
+        this.fmTaglineIndex = ThreadLocalRandom.current().nextInt(fmTaglines().length);
         this.fmVisibleChars = 0;
         this.fmLastAnimationStepAt = System.currentTimeMillis();
+        this.fmLangOpen = false;
+        this.fmLangAnim = 0.0f;
 
         for (ClickableWidget button : this.buttons) {
             if (((ClickableWidgetAccessor) button).getWidthPx() <= 20) {
@@ -111,7 +138,8 @@ public abstract class TitleScreenMixin extends Screen {
         this.textRenderer.draw(matrices, tagline, cx - subtitleWidth / 2.0f, logoY + 34.0f, 0xFF8A97A4);
 
         super.render(matrices, mouseX, mouseY, delta);
-        this.textRenderer.draw(matrices, "v1.2.4  |  FMclient", 4f, H - 10f, 0xFF5B6874);
+        this.textRenderer.draw(matrices, "v1.2.5  |  FMclient", 4f, H - 10f, 0xFF5B6874);
+        this.fmDrawLangSelector(matrices, mouseX, mouseY);
         ci.cancel();
     }
 
@@ -227,7 +255,9 @@ public abstract class TitleScreenMixin extends Screen {
     @Unique
     private void fmAdvanceTypewriter() {
         long now = System.currentTimeMillis();
-        String currentTagline = FMCLIENT_TAGLINES[this.fmTaglineIndex];
+        String[] taglines = fmTaglines();
+        if (this.fmTaglineIndex >= taglines.length) this.fmTaglineIndex = 0;
+        String currentTagline = taglines[this.fmTaglineIndex];
 
         switch (this.fmTypewriterState) {
             case STATE_TYPING:
@@ -270,7 +300,9 @@ public abstract class TitleScreenMixin extends Screen {
 
     @Unique
     private String fmCurrentVisibleTagline() {
-        String tagline = FMCLIENT_TAGLINES[this.fmTaglineIndex];
+        String[] taglines = fmTaglines();
+        if (this.fmTaglineIndex >= taglines.length) this.fmTaglineIndex = 0;
+        String tagline = taglines[this.fmTaglineIndex];
         int endIndex = Math.min(this.fmVisibleChars, tagline.length());
         String visibleText = tagline.substring(0, endIndex);
         return this.fmShouldShowCursor() ? visibleText + "|" : visibleText;
@@ -283,14 +315,136 @@ public abstract class TitleScreenMixin extends Screen {
 
     @Unique
     private int fmNextTaglineIndex() {
-        if (FMCLIENT_TAGLINES.length <= 1) {
+        if (fmTaglines().length <= 1) {
             return 0;
         }
 
         int nextIndex = this.fmTaglineIndex;
         while (nextIndex == this.fmTaglineIndex) {
-            nextIndex = ThreadLocalRandom.current().nextInt(FMCLIENT_TAGLINES.length);
+            nextIndex = ThreadLocalRandom.current().nextInt(fmTaglines().length);
         }
         return nextIndex;
+    }
+
+    // ── Language selector ────────────────────────────────────────────────────
+
+    @Unique
+    private void fmDrawLangSelector(MatrixStack matrices, int mouseX, int mouseY) {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        boolean isRu = mc.options.language.startsWith("ru");
+        String label = isRu ? "RU" : "EN";
+
+        // button
+        boolean hovBtn = mouseX >= LANG_BX && mouseX < LANG_BX + LANG_BW
+                      && mouseY >= LANG_BY && mouseY < LANG_BY + LANG_BH;
+        FMRenderer.roundedFill(matrices, LANG_BX, LANG_BY, LANG_BW, LANG_BH,
+                hovBtn ? 0xB8272C33 : 0xA21D2127);
+        FMRenderer.roundedBorder(matrices, LANG_BX, LANG_BY, LANG_BW, LANG_BH,
+                hovBtn ? 0x9CDDE5EC : 0x5E737E8A);
+        float labelX = LANG_BX + (LANG_BW - this.textRenderer.getWidth(label)) / 2.0f;
+        this.textRenderer.draw(matrices, label, labelX, LANG_BY + 3, hovBtn ? 0xFFF0F3F6 : 0xFFD2D8DE);
+
+        // animate dropdown
+        float target = fmLangOpen ? 1.0f : 0.0f;
+        fmLangAnim += (target - fmLangAnim) * 0.18f;
+        if (Math.abs(fmLangAnim - target) < 0.01f) fmLangAnim = target;
+
+        if (fmLangAnim > 0.01f) {
+            int dropX = LANG_BX;
+            int dropY = LANG_BY + LANG_BH + 3;
+            int fullH = LANG_ITEM_H * 2 + 4; // 2 items + padding
+            int visH = Math.max(4, (int)(fullH * fmLangAnim));
+            int bgAlpha = (int)(fmLangAnim * 0xA2);
+            int borderAlpha = (int)(fmLangAnim * 0x5E);
+
+            // dropdown background
+            FMRenderer.roundedFill(matrices, dropX, dropY, LANG_DROP_W, visH,
+                    (bgAlpha << 24) | 0x1D2127);
+            FMRenderer.roundedBorder(matrices, dropX, dropY, LANG_DROP_W, visH,
+                    (borderAlpha << 24) | 0x737E8A);
+
+            if (fmLangAnim > 0.4f) {
+                float textFade = Math.min(1.0f, (fmLangAnim - 0.4f) / 0.6f);
+                int textAlpha = (int)(textFade * 255);
+                int textColor = (textAlpha << 24) | 0xD2D8DE;
+                int textHover = (textAlpha << 24) | 0xF0F3F6;
+
+                // English
+                int enY = dropY + 2;
+                boolean hovEn = fmLangAnim > 0.7f
+                        && mouseX >= dropX && mouseX < dropX + LANG_DROP_W
+                        && mouseY >= enY && mouseY < enY + LANG_ITEM_H;
+                if (hovEn) {
+                    FMRenderer.roundedFill(matrices, dropX + 2, enY, LANG_DROP_W - 4, LANG_ITEM_H,
+                            ((int)(textFade * 0x20) << 24) | 0xFFFFFF);
+                }
+                this.textRenderer.draw(matrices, "English", dropX + 8, enY + 4,
+                        hovEn ? textHover : textColor);
+
+                // Russian
+                int ruY = enY + LANG_ITEM_H;
+                boolean hovRu = fmLangAnim > 0.7f
+                        && mouseX >= dropX && mouseX < dropX + LANG_DROP_W
+                        && mouseY >= ruY && mouseY < ruY + LANG_ITEM_H;
+                if (hovRu) {
+                    FMRenderer.roundedFill(matrices, dropX + 2, ruY, LANG_DROP_W - 4, LANG_ITEM_H,
+                            ((int)(textFade * 0x20) << 24) | 0xFFFFFF);
+                }
+                this.textRenderer.draw(matrices, "\u0420\u0443\u0441\u0441\u043A\u0438\u0439", dropX + 8, ruY + 4,
+                        hovRu ? textHover : textColor);
+            }
+        }
+    }
+
+    @Inject(method = "mouseClicked", at = @At("HEAD"), cancellable = true)
+    private void fmLangClick(double mouseX, double mouseY, int button, CallbackInfoReturnable<Boolean> cir) {
+        if (button != 0) return;
+
+        // click on language button
+        if (mouseX >= LANG_BX && mouseX < LANG_BX + LANG_BW
+                && mouseY >= LANG_BY && mouseY < LANG_BY + LANG_BH) {
+            fmLangOpen = !fmLangOpen;
+            cir.setReturnValue(true);
+            return;
+        }
+
+        // click on dropdown items
+        if (fmLangOpen && fmLangAnim > 0.7f) {
+            int dropX = LANG_BX;
+            int dropY = LANG_BY + LANG_BH + 3;
+            int enY = dropY + 2;
+            int ruY = enY + LANG_ITEM_H;
+
+            if (mouseX >= dropX && mouseX < dropX + LANG_DROP_W) {
+                if (mouseY >= enY && mouseY < enY + LANG_ITEM_H) {
+                    fmSetLanguage("en_us");
+                    fmLangOpen = false;
+                    cir.setReturnValue(true);
+                    return;
+                }
+                if (mouseY >= ruY && mouseY < ruY + LANG_ITEM_H) {
+                    fmSetLanguage("ru_ru");
+                    fmLangOpen = false;
+                    cir.setReturnValue(true);
+                    return;
+                }
+            }
+            // click outside dropdown — close it
+            fmLangOpen = false;
+        }
+    }
+
+    @Unique
+    private void fmSetLanguage(String code) {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        mc.options.language = code;
+        for (LanguageDefinition def : mc.getLanguageManager().getAllLanguages()) {
+            if (def.getCode().equals(code)) {
+                mc.getLanguageManager().setLanguage(def);
+                break;
+            }
+        }
+        mc.reloadResources();
+        mc.options.write();
     }
 }

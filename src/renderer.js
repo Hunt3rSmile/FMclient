@@ -4,11 +4,68 @@
 
 // ── Splash Screen ────────────────────────────────────────────
 const splash = document.getElementById('splash');
+const splashBar = document.getElementById('splash-bar');
+const splashHint = document.getElementById('splash-hint');
+const splashStatus = document.getElementById('splash-status');
+const splashProgressValue = document.getElementById('splash-progress-value');
 
-setTimeout(() => {
+const SPLASH_DURATION_MS = 2900;
+const SPLASH_STAGES = [
+  { at: 0.00, status: 'Запуск ядра', hint: 'Инициализируем оболочку FMclient' },
+  { at: 0.22, status: 'Интерфейс', hint: 'Поднимаем панели, тему и эффекты' },
+  { at: 0.52, status: 'Сервисы', hint: 'Проверяем Java, профиль и локальные данные' },
+  { at: 0.80, status: 'Модули', hint: 'Подключаем системные обработчики и IPC' },
+  { at: 0.94, status: 'Готово', hint: 'Финализируем стартовое окно' },
+];
+
+let splashFinished = false;
+
+function getSplashProgress(raw) {
+  if (raw < 0.72) return raw * (78 / 0.72);
+  if (raw < 0.90) return 78 + ((raw - 0.72) / 0.18) * 16;
+  return 94 + ((raw - 0.90) / 0.10) * 6;
+}
+
+function updateSplashStage(raw) {
+  const stage = SPLASH_STAGES.reduce((current, item) =>
+    raw >= item.at ? item : current, SPLASH_STAGES[0]);
+  const progress = Math.min(100, Math.round(getSplashProgress(raw)));
+
+  if (splashBar) splashBar.style.width = `${progress}%`;
+  if (splashStatus) splashStatus.textContent = stage.status;
+  if (splashHint) splashHint.textContent = stage.hint;
+  if (splashProgressValue) splashProgressValue.textContent = `${progress}%`;
+}
+
+function finishSplash() {
+  if (splashFinished || !splash) return;
+  splashFinished = true;
   splash.classList.add('hide');
   setTimeout(() => splash.classList.add('gone'), 650);
-}, 2400);
+}
+
+function runSplashTimeline() {
+  if (!splash) return;
+
+  const startAt = performance.now();
+
+  const tick = (now) => {
+    const raw = Math.min((now - startAt) / SPLASH_DURATION_MS, 1);
+    updateSplashStage(raw);
+
+    if (raw < 1) {
+      requestAnimationFrame(tick);
+      return;
+    }
+
+    setTimeout(finishSplash, 160);
+  };
+
+  updateSplashStage(0);
+  requestAnimationFrame(tick);
+}
+
+runSplashTimeline();
 
 // ── Particle Background ──────────────────────────────────────
 const canvas = document.getElementById('bg-canvas');

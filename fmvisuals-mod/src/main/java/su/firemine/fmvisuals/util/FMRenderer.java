@@ -40,7 +40,22 @@ public final class FMRenderer extends DrawableHelper {
     private static final float[] PY  = new float[N];
     private static final float[] PVX = new float[N];
     private static final float[] PVY = new float[N];
+    // Per-particle color (R, G, B)
+    private static final int[] PR = new int[N];
+    private static final int[] PG = new int[N];
+    private static final int[] PB = new int[N];
     private static long lastNs = 0;
+
+    private static final int[][] PALETTE = {
+        {100, 180, 230},  // голубой
+        {160, 100, 240},  // фиолетовый
+        {230, 80, 160},   // розовый
+        {80, 200, 180},   // бирюзовый
+        {240, 160, 60},   // оранжевый
+        {100, 220, 120},  // зелёный
+        {200, 200, 100},  // жёлтый
+        {120, 140, 240},  // синий
+    };
 
     static {
         Random rng = new Random(0xFCA_BCDEL);
@@ -48,9 +63,11 @@ public final class FMRenderer extends DrawableHelper {
             PX[i] = rng.nextFloat();
             PY[i] = rng.nextFloat();
             double a = rng.nextDouble() * Math.PI * 2;
-            float  s = 0.025f + rng.nextFloat() * 0.025f; // normalized units/sec
+            float  s = 0.008f + rng.nextFloat() * 0.010f;
             PVX[i] = (float)(Math.cos(a) * s);
             PVY[i] = (float)(Math.sin(a) * s);
+            int[] c = PALETTE[rng.nextInt(PALETTE.length)];
+            PR[i] = c[0]; PG[i] = c[1]; PB[i] = c[2];
         }
     }
 
@@ -60,9 +77,15 @@ public final class FMRenderer extends DrawableHelper {
     }
 
     public static void pill(MatrixStack m, int x, int y, int w, int h, int color) {
-        fill(m, x + 3, y, x + w - 3, y + h, color);
-        fill(m, x + 1, y + 1, x + w - 1, y + h - 1, color);
-        fill(m, x, y + 3, x + w, y + h - 3, color);
+        fmFill(m, x, y, w, h, color);
+    }
+
+    public static void roundedFill(MatrixStack m, int x, int y, int w, int h, int color) {
+        fmFill(m, x, y, w, h, color);
+    }
+
+    public static void roundedBorder(MatrixStack m, int x, int y, int w, int h, int color) {
+        fmBorder(m, x, y, w, h, color);
     }
 
     // ── Particle network: update + draw ───────────────────────────────────
@@ -81,7 +104,7 @@ public final class FMRenderer extends DrawableHelper {
             if (PY[i] > 1f) { PY[i] = 1f; PVY[i] = -Math.abs(PVY[i]); }
         }
 
-        // --- draw lines between close particles ---
+        // --- draw lines between close particles (colored by endpoints) ---
         float maxDist = W * 0.18f;
 
         RenderSystem.disableTexture();
@@ -100,11 +123,11 @@ public final class FMRenderer extends DrawableHelper {
                 float dy   = (PY[i] - PY[j]) * H;
                 float dist = (float) Math.sqrt(dx * dx + dy * dy);
                 if (dist < maxDist) {
-                    int alpha = (int)((1f - dist / maxDist) * 42);
+                    int alpha = (int)((1f - dist / maxDist) * 38);
                     float x1 = PX[i] * W, y1 = PY[i] * H;
                     float x2 = PX[j] * W, y2 = PY[j] * H;
-                    buf.vertex(matrix, x1, y1, 0f).color(NETWORK_R, NETWORK_G, NETWORK_B, alpha).next();
-                    buf.vertex(matrix, x2, y2, 0f).color(NETWORK_R, NETWORK_G, NETWORK_B, alpha).next();
+                    buf.vertex(matrix, x1, y1, 0f).color(PR[i], PG[i], PB[i], alpha).next();
+                    buf.vertex(matrix, x2, y2, 0f).color(PR[j], PG[j], PB[j], alpha).next();
                 }
             }
         }
@@ -112,32 +135,140 @@ public final class FMRenderer extends DrawableHelper {
 
         RenderSystem.enableTexture();
 
-        // --- draw particle dots ---
+        // --- draw particle dots: glow + core at 3× resolution ---
+        float s = 1.0f / 3.0f;
         for (int i = 0; i < N; i++) {
-            int x = (int)(PX[i] * W);
-            int y = (int)(PY[i] * H);
-            fill(matrices, x - 2, y - 2, x + 3, y + 3, 0x10273A48);
-            fill(matrices, x - 1, y - 1, x + 2, y + 2, 0xA060AAD6);
+            float px = PX[i] * W;
+            float py = PY[i] * H;
+            int r = PR[i], g = PG[i], b = PB[i];
+
+            matrices.push();
+            matrices.translate(px, py, 0);
+            matrices.scale(s, s, 1.0f);
+            // 3× space: 1 unit = 0.33 real px
+
+            // glow layers (real px: ~5, ~3.3, ~2)
+            fillCircleLocal(matrices, 0, 0, 15, (6  << 24) | (r << 16) | (g << 8) | b);
+            fillCircleLocal(matrices, 0, 0, 10, (12 << 24) | (r << 16) | (g << 8) | b);
+            fillCircleLocal(matrices, 0, 0, 6,  (20 << 24) | (r << 16) | (g << 8) | b);
+
+            // core dot (real px: ~0.7 radius — tight bright circle)
+            fillCircleLocal(matrices, 0, 0, 3, (220 << 24) | (r << 16) | (g << 8) | b);
+
+            matrices.pop();
         }
     }
 
-    // ── Rounded fill (radius 2px) ──────────────────────────────────────────
-    private static void fmFill(MatrixStack m, int x, int y, int w, int h, int c) {
-        fill(m, x + 2, y,     x + w - 2, y + h,     c);
-        fill(m, x + 1, y + 1, x + w - 1, y + h - 1, c);
-        fill(m, x,     y + 2, x + w,     y + h - 2, c);
+    // ── Fill circle via scanline (works reliably with fill()) ──────────────
+    private static void fillCircleLocal(MatrixStack m, int cx, int cy, int radius, int color) {
+        for (int dy = -radius; dy <= radius; dy++) {
+            int halfX = (int) Math.sqrt(radius * radius - dy * dy);
+            fill(m, cx - halfX, cy + dy, cx + halfX + 1, cy + dy + 1, color);
+        }
     }
 
-    // ── Rounded border ─────────────────────────────────────────────────────
+    // ── Smooth rounded rectangle (tessellated corners) ─────────────────────
+    private static final int CORNER_SEGMENTS = 24;
+
+    /**
+     * Builds the outline of a rounded rect as an array of (x,y) pairs,
+     * going clockwise: top edge → top-right arc → right edge → bottom-right arc → ...
+     */
+    private static float[] roundedRectOutline(float x1, float y1, float x2, float y2, float r) {
+        // 4 corners × CORNER_SEGMENTS + 4 straight-edge start points
+        int count = 4 * (CORNER_SEGMENTS + 1);
+        float[] pts = new float[count * 2];
+        int idx = 0;
+
+        // top-left arc (from 270° down to 180°, i.e. up-left)
+        for (int i = 0; i <= CORNER_SEGMENTS; i++) {
+            double ang = Math.toRadians(180.0 + 90.0 * i / CORNER_SEGMENTS);
+            pts[idx++] = x1 + r + (float) Math.cos(ang) * r;
+            pts[idx++] = y1 + r + (float) Math.sin(ang) * r;
+        }
+        // top-right arc
+        for (int i = 0; i <= CORNER_SEGMENTS; i++) {
+            double ang = Math.toRadians(270.0 + 90.0 * i / CORNER_SEGMENTS);
+            pts[idx++] = x2 - r + (float) Math.cos(ang) * r;
+            pts[idx++] = y1 + r + (float) Math.sin(ang) * r;
+        }
+        // bottom-right arc
+        for (int i = 0; i <= CORNER_SEGMENTS; i++) {
+            double ang = Math.toRadians(0.0 + 90.0 * i / CORNER_SEGMENTS);
+            pts[idx++] = x2 - r + (float) Math.cos(ang) * r;
+            pts[idx++] = y2 - r + (float) Math.sin(ang) * r;
+        }
+        // bottom-left arc
+        for (int i = 0; i <= CORNER_SEGMENTS; i++) {
+            double ang = Math.toRadians(90.0 + 90.0 * i / CORNER_SEGMENTS);
+            pts[idx++] = x1 + r + (float) Math.cos(ang) * r;
+            pts[idx++] = y2 - r + (float) Math.sin(ang) * r;
+        }
+
+        return pts;
+    }
+
+    private static void fmFill(MatrixStack m, int x, int y, int w, int h, int c) {
+        float r = Math.min(4.0f, Math.min(w, h) / 2.0f);
+        int a = (c >> 24) & 0xFF, cr = (c >> 16) & 0xFF, cg = (c >> 8) & 0xFF, cb = c & 0xFF;
+
+        RenderSystem.disableTexture();
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+
+        Matrix4f mat = m.peek().getModel();
+        Tessellator tess = Tessellator.getInstance();
+        BufferBuilder buf = tess.getBuffer();
+        buf.begin(GL11.GL_TRIANGLES, VertexFormats.POSITION_COLOR);
+
+        float cx = x + w / 2.0f, cy = y + h / 2.0f;
+        float[] pts = roundedRectOutline(x, y, x + w, y + h, r);
+        int verts = pts.length / 2;
+
+        for (int i = 0; i < verts; i++) {
+            int j = (i + 1) % verts;
+            buf.vertex(mat, cx, cy, 0).color(cr, cg, cb, a).next();
+            buf.vertex(mat, pts[i * 2], pts[i * 2 + 1], 0).color(cr, cg, cb, a).next();
+            buf.vertex(mat, pts[j * 2], pts[j * 2 + 1], 0).color(cr, cg, cb, a).next();
+        }
+
+        tess.draw();
+        RenderSystem.enableTexture();
+    }
+
     private static void fmBorder(MatrixStack m, int x, int y, int w, int h, int c) {
-        fill(m, x + 2,     y,         x + w - 2,   y + 1,         c);
-        fill(m, x + 2,     y + h - 1, x + w - 2,   y + h,         c);
-        fill(m, x,         y + 2,     x + 1,       y + h - 2,     c);
-        fill(m, x + w - 1, y + 2,     x + w,       y + h - 2,     c);
-        fill(m, x + 1,     y + 1,     x + 2,       y + 2,         c);
-        fill(m, x + w - 2, y + 1,     x + w - 1,   y + 2,         c);
-        fill(m, x + 1,     y + h - 2, x + 2,       y + h - 1,     c);
-        fill(m, x + w - 2, y + h - 2, x + w - 1,   y + h - 1,     c);
+        float r = Math.min(4.0f, Math.min(w, h) / 2.0f);
+        float t = 1.0f;
+        int a = (c >> 24) & 0xFF, cr = (c >> 16) & 0xFF, cg = (c >> 8) & 0xFF, cb = c & 0xFF;
+
+        RenderSystem.disableTexture();
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+
+        Matrix4f mat = m.peek().getModel();
+        Tessellator tess = Tessellator.getInstance();
+        BufferBuilder buf = tess.getBuffer();
+        buf.begin(GL11.GL_TRIANGLES, VertexFormats.POSITION_COLOR);
+
+        float[] outer = roundedRectOutline(x, y, x + w, y + h, r);
+        float ri = Math.max(r - t, 0);
+        float[] inner = roundedRectOutline(x + t, y + t, x + w - t, y + h - t, ri);
+        int verts = outer.length / 2;
+
+        for (int i = 0; i < verts; i++) {
+            int j = (i + 1) % verts;
+            // two triangles per segment of the ring
+            buf.vertex(mat, outer[i * 2], outer[i * 2 + 1], 0).color(cr, cg, cb, a).next();
+            buf.vertex(mat, inner[i * 2], inner[i * 2 + 1], 0).color(cr, cg, cb, a).next();
+            buf.vertex(mat, outer[j * 2], outer[j * 2 + 1], 0).color(cr, cg, cb, a).next();
+
+            buf.vertex(mat, outer[j * 2], outer[j * 2 + 1], 0).color(cr, cg, cb, a).next();
+            buf.vertex(mat, inner[i * 2], inner[i * 2 + 1], 0).color(cr, cg, cb, a).next();
+            buf.vertex(mat, inner[j * 2], inner[j * 2 + 1], 0).color(cr, cg, cb, a).next();
+        }
+
+        tess.draw();
+        RenderSystem.enableTexture();
     }
 
     // ── Restyle buttons ────────────────────────────────────────────────────
@@ -161,13 +292,18 @@ public final class FMRenderer extends DrawableHelper {
             fmFill(matrices, btn.x, btn.y, bw, bh, hov ? COMPACT_FILL_HOVER : COMPACT_FILL);
             fmBorder(matrices, btn.x, btn.y, bw, bh, hov ? BUTTON_EDGE_HOVER : COMPACT_EDGE);
         } else {
-            fill(matrices, btn.x - 2, btn.y - 2, btn.x + bw + 2, btn.y + bh + 2, 0x0C000000);
+            // soft shadow behind button
+            fmFill(matrices, btn.x - 1, btn.y - 1, bw + 2, bh + 2, 0x18000000);
+            // main body
             fmFill(matrices, btn.x, btn.y, bw, bh, hov ? BUTTON_FILL_HOVER : BUTTON_FILL);
+            // inner top highlight (subtle glass effect)
+            fmFill(matrices, btn.x + 1, btn.y + 1, bw - 2, 2,
+                hov ? 0x22FFFFFF : 0x14FFFFFF);
+            // inner bottom shadow
+            fmFill(matrices, btn.x + 1, btn.y + bh - 3, bw - 2, 2,
+                hov ? 0x18000000 : 0x10000000);
+            // border
             fmBorder(matrices, btn.x, btn.y, bw, bh, hov ? BUTTON_EDGE_HOVER : BUTTON_EDGE);
-            fill(matrices, btn.x + 2, btn.y + 1, btn.x + bw - 2, btn.y + 3,
-                hov ? 0x1BFFFFFF : 0x12FFFFFF);
-            fill(matrices, btn.x + 2, btn.y + bh - 3, btn.x + bw - 2, btn.y + bh - 1,
-                hov ? BUTTON_GLOW : 0x12000000);
         }
 
         Text msg = btn.getMessage();
@@ -192,34 +328,100 @@ public final class FMRenderer extends DrawableHelper {
         tr.drawWithShadow(matrices, msg, textX, btn.y + (bh - 8) / 2.0f, color);
     }
 
-    private static void drawSettingsIcon(MatrixStack matrices, int x, int y, int w, int h, int color) {
-        int cx = x + w / 2;
-        int cy = y + h / 2;
-        int ring = color & 0xDFFFFFFF;
+    /**
+     * Draws icons at 3× internal resolution using matrix scaling.
+     * Each fill() unit becomes 1/3 of a real pixel — smooth sub-pixel rendering.
+     */
+    private static final int ICON_SCALE = 3;
 
-        fill(matrices, cx - 1, cy - 7, cx + 1, cy - 4, color);
-        fill(matrices, cx - 1, cy + 4, cx + 1, cy + 7, color);
-        fill(matrices, cx - 7, cy - 1, cx - 4, cy + 1, color);
-        fill(matrices, cx + 4, cy - 1, cx + 7, cy + 1, color);
-        fill(matrices, cx - 5, cy - 5, cx - 3, cy - 3, color);
-        fill(matrices, cx + 3, cy - 5, cx + 5, cy - 3, color);
-        fill(matrices, cx - 5, cy + 3, cx - 3, cy + 5, color);
-        fill(matrices, cx + 3, cy + 3, cx + 5, cy + 5, color);
-        fill(matrices, cx - 4, cy - 4, cx + 4, cy + 4, ring);
-        fill(matrices, cx - 2, cy - 2, cx + 2, cy + 2, 0xFF1C2127);
+    private static void drawSettingsIcon(MatrixStack matrices, int x, int y, int w, int h, int color) {
+        float cx = x + w / 2.0f;
+        float cy = y + h / 2.0f;
+        float s = 1.0f / ICON_SCALE;
+
+        matrices.push();
+        matrices.translate(cx, cy, 0);
+        matrices.scale(s, s, 1.0f);
+        // 3× space: 1 unit = 0.33 real px
+
+        float ringInner = 4.0f;   // inner edge of ring body
+        float ringOuter = 7.5f;   // outer edge of ring / tooth base
+        float toothTip  = 12.0f;  // tip of teeth (~4 real px total radius)
+        float holeR     = 2.8f;   // center hole
+        int   numTeeth  = 8;
+        double sectorAng = Math.PI * 2.0 / numTeeth;
+        double toothHalf = sectorAng * 0.28; // each tooth covers ~56% of sector
+
+        int gridR = (int) toothTip + 1;
+
+        // Scanline render the gear shape
+        for (int py = -gridR; py <= gridR; py++) {
+            boolean inRun = false;
+            int runStart = 0;
+            for (int px = -gridR; px <= gridR + 1; px++) {
+                boolean filled = false;
+                if (px <= gridR) {
+                    float dist = (float) Math.sqrt(px * px + py * py);
+                    if (dist >= ringInner && dist <= toothTip) {
+                        if (dist <= ringOuter) {
+                            // inside ring body — always filled
+                            filled = true;
+                        } else {
+                            // between ringOuter and toothTip — only in tooth zones
+                            double ang = Math.atan2(py, px);
+                            double posInSector = ((ang % sectorAng) + sectorAng) % sectorAng;
+                            double distFromCenter = Math.abs(posInSector - sectorAng / 2.0);
+                            filled = distFromCenter < toothHalf;
+                        }
+                    }
+                    // cut center hole
+                    if (dist < holeR) filled = false;
+                }
+
+                if (filled && !inRun) {
+                    runStart = px;
+                    inRun = true;
+                } else if (!filled && inRun) {
+                    fill(matrices, runStart, py, px, py + 1, color);
+                    inRun = false;
+                }
+            }
+        }
+
+        matrices.pop();
     }
 
     private static void drawQuitIcon(MatrixStack matrices, int x, int y, int w, int h, int color) {
-        int cx = x + w / 2;
-        int cy = y + h / 2;
-        fill(matrices, cx - 5, cy - 6, cx - 2, cy - 3, color);
-        fill(matrices, cx - 2, cy - 3, cx + 1, cy, color);
-        fill(matrices, cx + 1, cy, cx + 4, cy + 3, color);
-        fill(matrices, cx + 4, cy + 3, cx + 7, cy + 6, color);
+        float cx = x + w / 2.0f;
+        float cy = y + h / 2.0f;
+        float s = 1.0f / ICON_SCALE;
+        int dim = (color & 0x00FFFFFF) | 0x40000000;
 
-        fill(matrices, cx + 4, cy - 6, cx + 7, cy - 3, color);
-        fill(matrices, cx + 1, cy - 3, cx + 4, cy, color);
-        fill(matrices, cx - 2, cy, cx + 1, cy + 3, color);
-        fill(matrices, cx - 5, cy + 3, cx - 2, cy + 6, color);
+        matrices.push();
+        matrices.translate(cx, cy, 0);
+        matrices.scale(s, s, 1.0f);
+
+        int half = 9;  // ~3 real px — same as gear outerR
+        int thick = 2;
+
+        // "\" diagonal + AA fringe
+        for (int i = -half; i <= half; i++) {
+            fill(matrices, i - thick, i - thick, i + thick, i + thick, color);
+            fill(matrices, i - thick - 1, i - thick, i - thick, i + thick, dim);
+            fill(matrices, i + thick, i - thick, i + thick + 1, i + thick, dim);
+            fill(matrices, i - thick, i - thick - 1, i + thick, i - thick, dim);
+            fill(matrices, i - thick, i + thick, i + thick, i + thick + 1, dim);
+        }
+
+        // "/" diagonal + AA fringe
+        for (int i = -half; i <= half; i++) {
+            fill(matrices, -i - thick, i - thick, -i + thick, i + thick, color);
+            fill(matrices, -i - thick - 1, i - thick, -i - thick, i + thick, dim);
+            fill(matrices, -i + thick, i - thick, -i + thick + 1, i + thick, dim);
+            fill(matrices, -i - thick, i - thick - 1, -i + thick, i - thick, dim);
+            fill(matrices, -i - thick, i + thick, -i + thick, i + thick + 1, dim);
+        }
+
+        matrices.pop();
     }
 }

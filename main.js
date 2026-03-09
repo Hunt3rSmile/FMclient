@@ -1457,7 +1457,7 @@ ipcMain.handle('launch-game', async (event, options) => {
       `-Xmx${ram}m`,
       `-Xms512m`,
       `-Dminecraft.launcher.brand=FMclient`,
-      `-Dminecraft.launcher.version=1.0.0`,
+      `-Dminecraft.launcher.version=${CURRENT_VER}`,
     ];
 
     // Inject authlib-injector only for non-MSA users:

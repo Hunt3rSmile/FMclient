@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "fmvisuals",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "name": "FMclient Visuals",
   "description": "Custom title screen and visual settings for FMclient",
   "authors": ["Hunt3rSmile"],

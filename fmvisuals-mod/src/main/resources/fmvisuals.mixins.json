@@ -11,7 +11,8 @@
     "ClickableWidgetAccessor",
     "EntryListWidgetAccessor",
     "EntryListWidgetMixin",
-    "MinecraftClientMixin"
+    "MinecraftClientMixin",
+    "SplashScreenMixin"
   ],
   "injectors": {
     "defaultRequire": 1

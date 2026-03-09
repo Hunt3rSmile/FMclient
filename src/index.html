@@ -13,13 +13,28 @@
 
   <!-- Splash screen -->
   <div class="splash" id="splash">
+    <div class="splash-ambient" aria-hidden="true">
+      <span class="splash-blob splash-blob-a"></span>
+      <span class="splash-blob splash-blob-b"></span>
+      <span class="splash-blob splash-blob-c"></span>
+      <span class="splash-grid"></span>
+    </div>
     <div class="splash-content">
-      <img src="../assets/flame.jpg" class="splash-logo" alt="logo">
+      <div class="splash-logo-shell">
+        <div class="splash-logo-glow"></div>
+        <div class="splash-ring splash-ring-a"></div>
+        <div class="splash-ring splash-ring-b"></div>
+        <img src="../assets/flame.jpg" class="splash-logo" alt="logo">
+      </div>
       <div class="splash-title">FMclient</div>
+      <div class="splash-status-row">
+        <div class="splash-status-pill" id="splash-status">Запуск ядра</div>
+        <div class="splash-progress-value" id="splash-progress-value">0%</div>
+      </div>
       <div class="splash-bar-wrap">
         <div class="splash-bar" id="splash-bar"></div>
       </div>
-      <div class="splash-hint">Загрузка...</div>
+      <div class="splash-hint" id="splash-hint">Инициализация интерфейса</div>
     </div>
   </div>
 
@@ -572,7 +587,7 @@
               <div class="about-logo">
                 <span class="logo-fm">FM</span><span class="logo-client">client</span>
               </div>
-              <div class="about-version">Версия 1.2.4</div>
+              <div class="about-version">Версия 1.2.5</div>
               <div class="about-desc">Современный, красивый лаунчер для Minecraft</div>
               <div class="about-tags">
                 <span class="about-tag">Electron</span>
